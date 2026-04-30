@@ -4,7 +4,7 @@ import '../storage/secure_storage.dart';
 class ApiClient {
   ApiClient._();
 
-  static const _baseUrl = 'http://192.168.0.6:8000/api';
+  static const _baseUrl = 'http://146.190.78.50/api';
 
   static Dio get instance {
     final dio = Dio(BaseOptions(
