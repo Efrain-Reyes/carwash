@@ -47,10 +47,7 @@ class _HomeScreenState extends State<HomeScreen> {
           const ReportsScreen(),
         ],
       ),
-      bottomNavigationBar: AppBottomNav(
-        current: _currentTab,
-        onTap: _onTabTap,
-      ),
+      bottomNavigationBar: AppBottomNav(current: _currentTab, onTap: _onTabTap),
     );
   }
 }
@@ -219,7 +216,7 @@ class _Content extends StatelessWidget {
   Widget build(BuildContext context) {
     final r = report?.resumen;
     final washCount = report?.lavados.cantidad ?? 0;
-    final flujo = r?.flujoEfectivoEstimado ?? 0;
+    final movimiento = r?.movimientoNetoEfectivo ?? 0;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
@@ -227,51 +224,57 @@ class _Content extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Summary cards 2×2
-          Row(children: [
-            Expanded(
-              child: SummaryCard(
-                compact: true,
-                label: 'Ingresos',
-                value: Fmt.lempira(r?.ingresosLavados ?? 0),
-                icon: Icons.local_car_wash_rounded,
-                iconColor: AppColors.accent,
+          Row(
+            children: [
+              Expanded(
+                child: SummaryCard(
+                  compact: true,
+                  label: 'Ingresos',
+                  value: Fmt.lempira(r?.ingresosLavados ?? 0),
+                  icon: Icons.local_car_wash_rounded,
+                  iconColor: AppColors.accent,
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: SummaryCard(
-                compact: true,
-                label: 'Lavados',
-                value: '$washCount',
-                icon: Icons.car_repair_rounded,
-                iconColor: AppColors.primary,
+              const SizedBox(width: 10),
+              Expanded(
+                child: SummaryCard(
+                  compact: true,
+                  label: 'Lavados',
+                  value: '$washCount',
+                  icon: Icons.car_repair_rounded,
+                  iconColor: AppColors.primary,
+                ),
               ),
-            ),
-          ]),
+            ],
+          ),
           const SizedBox(height: 10),
-          Row(children: [
-            Expanded(
-              child: SummaryCard(
-                compact: true,
-                label: 'Gastos',
-                value: Fmt.lempira(r?.totalGastos ?? 0),
-                icon: Icons.receipt_long_rounded,
-                iconColor: AppColors.warningDot,
+          Row(
+            children: [
+              Expanded(
+                child: SummaryCard(
+                  compact: true,
+                  label: 'Gastos',
+                  value: Fmt.lempira(r?.totalGastos ?? 0),
+                  icon: Icons.receipt_long_rounded,
+                  iconColor: AppColors.warningDot,
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: SummaryCard(
-                compact: true,
-                label: 'Flujo est.',
-                value: Fmt.lempira(flujo),
-                icon: flujo >= 0
-                    ? Icons.trending_up_rounded
-                    : Icons.trending_down_rounded,
-                iconColor: flujo >= 0 ? AppColors.successFg : AppColors.errorFg,
+              const SizedBox(width: 10),
+              Expanded(
+                child: SummaryCard(
+                  compact: true,
+                  label: 'Mov. neto efectivo',
+                  value: Fmt.lempira(movimiento),
+                  icon: movimiento >= 0
+                      ? Icons.trending_up_rounded
+                      : Icons.trending_down_rounded,
+                  iconColor: movimiento >= 0
+                      ? AppColors.successFg
+                      : AppColors.errorFg,
+                ),
               ),
-            ),
-          ]),
+            ],
+          ),
 
           const SizedBox(height: 16),
 
@@ -283,39 +286,41 @@ class _Content extends StatelessWidget {
           // Quick access 2×2
           SectionHeader(title: 'Accesos rápidos'),
           const SizedBox(height: 10),
-          Row(children: [
-            Expanded(
-              child: _QuickCard(
-                icon: Icons.local_car_wash_rounded,
-                label: 'Lavados',
-                onTap: () => onTabChange(NavTab.lavados),
+          Row(
+            children: [
+              Expanded(
+                child: _QuickCard(
+                  icon: Icons.local_car_wash_rounded,
+                  label: 'Lavados',
+                  onTap: () => onTabChange(NavTab.lavados),
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _QuickCard(
-                icon: Icons.receipt_long_rounded,
-                label: 'Gastos',
-                onTap: () => onTabChange(NavTab.gastos),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _QuickCard(
+                  icon: Icons.receipt_long_rounded,
+                  label: 'Gastos',
+                  onTap: () => onTabChange(NavTab.gastos),
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _QuickCard(
-                icon: Icons.group_rounded,
-                label: 'Nómina',
-                onTap: () => onTabChange(NavTab.nomina),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _QuickCard(
+                  icon: Icons.group_rounded,
+                  label: 'Nómina',
+                  onTap: () => onTabChange(NavTab.nomina),
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _QuickCard(
-                icon: Icons.bar_chart_rounded,
-                label: 'Reportes',
-                onTap: () => onTabChange(NavTab.reportes),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _QuickCard(
+                  icon: Icons.bar_chart_rounded,
+                  label: 'Reportes',
+                  onTap: () => onTabChange(NavTab.reportes),
+                ),
               ),
-            ),
-          ]),
+            ],
+          ),
 
           const SizedBox(height: 16),
 
@@ -574,7 +579,9 @@ class _WashRow extends StatelessWidget {
                   ),
                   const SizedBox(width: 6),
                   StatusBadge.wash(
-                    wash.isCompleted ? WashStatus.completado : WashStatus.anulado,
+                    wash.isCompleted
+                        ? WashStatus.completado
+                        : WashStatus.anulado,
                   ),
                 ],
               ),
@@ -602,7 +609,11 @@ class _ErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.wifi_off_rounded, size: 44, color: AppColors.textMuted2),
+            const Icon(
+              Icons.wifi_off_rounded,
+              size: 44,
+              color: AppColors.textMuted2,
+            ),
             const SizedBox(height: 14),
             Text(
               message,

@@ -2,11 +2,12 @@
 
 use App\Http\Controllers\Api\AdvanceController;
 use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\PayrollController;
-use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\CashSessionController;
 use App\Http\Controllers\Api\CatalogItemController;
 use App\Http\Controllers\Api\EmployeeController;
 use App\Http\Controllers\Api\ExpenseController;
+use App\Http\Controllers\Api\PayrollController;
+use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\SupplierController;
 use App\Http\Controllers\Api\VehicleTypeController;
 use App\Http\Controllers\Api\WashController;
@@ -92,6 +93,13 @@ Route::middleware('auth:sanctum')->group(function () {
     // Reportes
     Route::get('reports/accounting', [ReportController::class, 'accounting'])->middleware('can:report.view');
     Route::get('reports/accounting/timeline', [ReportController::class, 'accountingTimeline'])->middleware('can:report.view');
+
+    // Caja
+    Route::get('cash-sessions', [CashSessionController::class, 'index'])->middleware('can:report.view');
+    Route::get('cash-sessions/current', [CashSessionController::class, 'current'])->middleware('can:report.view');
+    Route::post('cash-sessions', [CashSessionController::class, 'store'])->middleware('can:report.view');
+    Route::get('cash-sessions/{cashSession}', [CashSessionController::class, 'show'])->middleware('can:report.view');
+    Route::patch('cash-sessions/{cashSession}/close', [CashSessionController::class, 'close'])->middleware('can:report.view');
 
     // Gastos
     Route::get('expenses', [ExpenseController::class, 'index'])->middleware('can:expense.view');

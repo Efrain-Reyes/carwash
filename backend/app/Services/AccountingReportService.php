@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\CashSession;
 use App\Models\EmployeeAdvance;
 use App\Models\EmployeeAdvancePayment;
 use App\Models\Expense;
@@ -14,18 +15,14 @@ use Illuminate\Support\Carbon;
 class AccountingReportService
 {
     private Carbon $from;
+
     private Carbon $to;
 
     public function generate(string $dateFrom, string $dateTo): array
     {
         $this->setRange($dateFrom, $dateTo);
 
-        $ingresos        = $this->totalIngresos();
-        $gastos          = $this->totalGastos();
-        $sueldoDevengado = $this->sueldoDevengado();
-        $nominaNeta      = $this->nominaNetaPagada();
-        $adelantos       = $this->adelantosEntregados();
-        $abonos          = $this->abonosRecibidos();
+        $summary = $this->movementSummary();
 
         return [
             'periodo' => [
@@ -34,25 +31,20 @@ class AccountingReportService
             ],
 
             'resumen' => [
-                'ingresos_lavados'              => $ingresos,
-                'total_gastos'                  => $gastos,
-                'sueldo_devengado'              => $sueldoDevengado,
-                'nomina_neta_pagada'            => $nominaNeta,
-                'adelantos_entregados'          => $adelantos,
-                'abonos_recibidos_trabajadores' => $abonos,
-                'utilidad_operativa'            => round($ingresos - $gastos - $sueldoDevengado, 2),
-                'flujo_efectivo_estimado'       => round($ingresos - $gastos - $adelantos - $nominaNeta + $abonos, 2),
+                ...$summary,
             ],
 
+            'caja' => $this->cashSummary($summary['movimiento_neto_efectivo']),
+
             'lavados' => [
-                'cantidad'     => $this->cantidadLavados(),
+                'cantidad' => $this->cantidadLavados(),
                 'por_vehiculo' => $this->statsPorVehiculo(),
                 'por_servicio' => $this->statsPorServicio(),
             ],
 
             'gastos_detalle' => [
                 'por_proveedor' => $this->gastosPorProveedor(),
-                'por_item'      => $this->gastosPorItem(),
+                'por_item' => $this->gastosPorItem(),
             ],
         ];
     }
@@ -85,6 +77,7 @@ class AccountingReportService
                     'ingresos_lavados' => round($dailyIngresos, 2),
                     'gastos' => round($dailyGastos, 2),
                     'utilidad_operativa' => round($dailyIngresos - $dailyGastos - $dailySueldos, 2),
+                    'movimiento_neto_efectivo' => round($dailyIngresos - $dailyGastos - $dailyAdelantos - $dailyNominaNeta + $dailyAbonos, 2),
                     'flujo_efectivo_estimado' => round($dailyIngresos - $dailyGastos - $dailyAdelantos - $dailyNominaNeta + $dailyAbonos, 2),
                 ];
             })
@@ -100,17 +93,100 @@ class AccountingReportService
         ];
     }
 
+    public function cashMovementBetween(string|Carbon $from, string|Carbon $to): array
+    {
+        $this->setExactRange($from, $to);
+
+        return $this->movementSummary();
+    }
+
+    public function calculateExpectedClosing(float $openingAmount, float $movement): float
+    {
+        return round($openingAmount + $movement, 2);
+    }
+
     private function setRange(string $dateFrom, string $dateTo): void
     {
         $tz = config('app.timezone');
 
         $this->from = Carbon::parse($dateFrom, $tz)->startOfDay();
-        $this->to   = Carbon::parse($dateTo,   $tz)->endOfDay();
+        $this->to = Carbon::parse($dateTo, $tz)->endOfDay();
+    }
+
+    private function setExactRange(string|Carbon $from, string|Carbon $to): void
+    {
+        $tz = config('app.timezone');
+
+        $this->from = $from instanceof Carbon ? $from->copy() : Carbon::parse($from, $tz);
+        $this->to = $to instanceof Carbon ? $to->copy() : Carbon::parse($to, $tz);
     }
 
     // ──────────────────────────────────────────────
     // Totales del resumen
     // ──────────────────────────────────────────────
+
+    private function movementSummary(): array
+    {
+        $ingresos = $this->totalIngresos();
+        $gastos = $this->totalGastos();
+        $sueldoDevengado = $this->sueldoDevengado();
+        $nominaNeta = $this->nominaNetaPagada();
+        $adelantos = $this->adelantosEntregados();
+        $abonos = $this->abonosRecibidos();
+        $movimientoNeto = round($ingresos - $gastos - $adelantos - $nominaNeta + $abonos, 2);
+
+        return [
+            'ingresos_lavados' => $ingresos,
+            'total_gastos' => $gastos,
+            'sueldo_devengado' => $sueldoDevengado,
+            'nomina_neta_pagada' => $nominaNeta,
+            'adelantos_entregados' => $adelantos,
+            'abonos_recibidos_trabajadores' => $abonos,
+            'utilidad_operativa' => round($ingresos - $gastos - $sueldoDevengado, 2),
+            'movimiento_neto_efectivo' => $movimientoNeto,
+            'flujo_efectivo_estimado' => $movimientoNeto,
+        ];
+    }
+
+    private function cashSummary(float $movement): ?array
+    {
+        $session = CashSession::query()
+            ->where('opened_at', '<=', $this->to)
+            ->where(function ($query) {
+                $query->whereNull('closed_at')
+                    ->orWhere('closed_at', '>=', $this->from);
+            })
+            ->orderByDesc('opened_at')
+            ->first();
+
+        if (! $session) {
+            return null;
+        }
+
+        $opening = (float) $session->opening_amount;
+        $expected = $session->status === 'cerrada' && $session->expected_closing_amount !== null
+            ? (float) $session->expected_closing_amount
+            : $this->calculateExpectedClosing($opening, $movement);
+        $counted = $session->counted_closing_amount !== null
+            ? (float) $session->counted_closing_amount
+            : null;
+        $difference = $session->difference !== null
+            ? (float) $session->difference
+            : ($counted !== null ? round($counted - $expected, 2) : null);
+
+        return [
+            'id' => $session->id,
+            'status' => $session->status,
+            'saldo_inicial_caja' => $opening,
+            'movimiento_neto_efectivo' => $movement,
+            'saldo_final_estimado' => $expected,
+            'efectivo_contado' => $counted,
+            'diferencia_caja' => $difference,
+            'opened_at' => $session->opened_at?->toDateTimeString(),
+            'closed_at' => $session->closed_at?->toDateTimeString(),
+            'notes' => $session->notes,
+        ];
+    }
 
     private function totalIngresos(): float
     {
@@ -150,6 +226,7 @@ class AccountingReportService
     private function abonosRecibidos(): float
     {
         return (float) EmployeeAdvancePayment::where('payment_type', 'abono_efectivo')
+            ->whereHas('advance', fn ($q) => $q->where('status', '!=', 'anulado'))
             ->whereBetween('payment_date', [$this->from, $this->to])
             ->sum('amount');
     }
@@ -175,9 +252,9 @@ class AccountingReportService
             ->orderByDesc('total')
             ->get()
             ->map(fn ($r) => [
-                'tipo'     => $r->tipo,
+                'tipo' => $r->tipo,
                 'cantidad' => (int) $r->cantidad,
-                'total'    => (float) $r->total,
+                'total' => (float) $r->total,
             ])
             ->toArray();
     }
@@ -196,7 +273,7 @@ class AccountingReportService
                 'vehiculo' => $r->vehiculo,
                 'servicio' => $r->servicio,
                 'cantidad' => (int) $r->cantidad,
-                'total'    => (float) $r->total,
+                'total' => (float) $r->total,
             ])
             ->toArray();
     }
@@ -216,8 +293,8 @@ class AccountingReportService
             ->get()
             ->map(fn ($r) => [
                 'proveedor' => $r->proveedor,
-                'facturas'  => (int) $r->facturas,
-                'total'     => (float) $r->total,
+                'facturas' => (int) $r->facturas,
+                'total' => (float) $r->total,
             ])
             ->toArray();
     }
@@ -233,8 +310,8 @@ class AccountingReportService
             ->get()
             ->map(fn ($r) => [
                 'descripcion' => $r->description,
-                'cantidad'    => (float) $r->cantidad,
-                'total'       => (float) $r->total,
+                'cantidad' => (float) $r->cantidad,
+                'total' => (float) $r->total,
             ])
             ->toArray();
     }
@@ -297,6 +374,7 @@ class AccountingReportService
     private function cashAdvancePaymentTotalsByDate(): array
     {
         return EmployeeAdvancePayment::where('payment_type', 'abono_efectivo')
+            ->whereHas('advance', fn ($q) => $q->where('status', '!=', 'anulado'))
             ->whereBetween('payment_date', [$this->from, $this->to])
             ->selectRaw('DATE(payment_date) as fecha, SUM(amount) as total')
             ->groupBy('fecha')

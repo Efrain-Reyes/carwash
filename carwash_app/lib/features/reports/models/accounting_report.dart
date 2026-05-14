@@ -21,12 +21,14 @@ DateTime? _asDate(dynamic value) {
 class AccountingReport {
   final AccountingPeriod periodo;
   final AccountingSummary resumen;
+  final AccountingCash? caja;
   final AccountingWashes lavados;
   final AccountingExpensesDetail gastosDetalle;
 
   const AccountingReport({
     required this.periodo,
     required this.resumen,
+    this.caja,
     required this.lavados,
     required this.gastosDetalle,
   });
@@ -38,6 +40,7 @@ class AccountingReport {
       resumen.nominaNetaPagada != 0 ||
       resumen.adelantosEntregados != 0 ||
       resumen.abonosRecibidos != 0 ||
+      caja != null ||
       lavados.cantidad > 0 ||
       gastosDetalle.porProveedor.isNotEmpty ||
       gastosDetalle.porItem.isNotEmpty;
@@ -47,6 +50,7 @@ class AccountingReport {
     final lavados = json['lavados'];
     final gastos = json['gastos_detalle'];
     final periodo = json['periodo'];
+    final caja = json['caja'];
 
     return AccountingReport(
       periodo: AccountingPeriod.fromJson(
@@ -55,12 +59,60 @@ class AccountingReport {
       resumen: AccountingSummary.fromJson(
         resumen is Map<String, dynamic> ? resumen : const {},
       ),
+      caja: caja is Map<String, dynamic> ? AccountingCash.fromJson(caja) : null,
       lavados: AccountingWashes.fromJson(
         lavados is Map<String, dynamic> ? lavados : const {},
       ),
       gastosDetalle: AccountingExpensesDetail.fromJson(
         gastos is Map<String, dynamic> ? gastos : const {},
       ),
+    );
+  }
+}
+
+class AccountingCash {
+  final int id;
+  final String status;
+  final double saldoInicialCaja;
+  final double movimientoNetoEfectivo;
+  final double saldoFinalEstimado;
+  final double? efectivoContado;
+  final double? diferenciaCaja;
+  final DateTime? openedAt;
+  final DateTime? closedAt;
+  final String? notes;
+
+  const AccountingCash({
+    required this.id,
+    required this.status,
+    required this.saldoInicialCaja,
+    required this.movimientoNetoEfectivo,
+    required this.saldoFinalEstimado,
+    this.efectivoContado,
+    this.diferenciaCaja,
+    this.openedAt,
+    this.closedAt,
+    this.notes,
+  });
+
+  bool get isClosed => status == 'cerrada';
+
+  factory AccountingCash.fromJson(Map<String, dynamic> json) {
+    return AccountingCash(
+      id: _asInt(json['id']),
+      status: json['status']?.toString() ?? '',
+      saldoInicialCaja: _asDouble(json['saldo_inicial_caja']),
+      movimientoNetoEfectivo: _asDouble(json['movimiento_neto_efectivo']),
+      saldoFinalEstimado: _asDouble(json['saldo_final_estimado']),
+      efectivoContado: json['efectivo_contado'] == null
+          ? null
+          : _asDouble(json['efectivo_contado']),
+      diferenciaCaja: json['diferencia_caja'] == null
+          ? null
+          : _asDouble(json['diferencia_caja']),
+      openedAt: _asDate(json['opened_at']),
+      closedAt: _asDate(json['closed_at']),
+      notes: json['notes']?.toString(),
     );
   }
 }
@@ -87,6 +139,7 @@ class AccountingSummary {
   final double adelantosEntregados;
   final double abonosRecibidos;
   final double utilidadOperativa;
+  final double movimientoNetoEfectivo;
   final double flujoEfectivoEstimado;
 
   const AccountingSummary({
@@ -97,6 +150,7 @@ class AccountingSummary {
     required this.adelantosEntregados,
     required this.abonosRecibidos,
     required this.utilidadOperativa,
+    required this.movimientoNetoEfectivo,
     required this.flujoEfectivoEstimado,
   });
 
@@ -109,6 +163,9 @@ class AccountingSummary {
       adelantosEntregados: _asDouble(json['adelantos_entregados']),
       abonosRecibidos: _asDouble(json['abonos_recibidos_trabajadores']),
       utilidadOperativa: _asDouble(json['utilidad_operativa']),
+      movimientoNetoEfectivo: _asDouble(
+        json['movimiento_neto_efectivo'] ?? json['flujo_efectivo_estimado'],
+      ),
       flujoEfectivoEstimado: _asDouble(json['flujo_efectivo_estimado']),
     );
   }

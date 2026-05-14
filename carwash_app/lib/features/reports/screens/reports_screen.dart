@@ -231,6 +231,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
             ],
             _SummarySection(report: report),
             const SizedBox(height: 18),
+            if (report.caja != null) ...[
+              _CashSection(caja: report.caja!),
+              const SizedBox(height: 18),
+            ],
             _BusinessTrendSection(
               timeline: _timeline,
               loading: _timelineLoading,
@@ -429,17 +433,125 @@ class _SummarySection extends StatelessWidget {
                   : AppColors.errorFg,
             ),
             _MetricCardData(
-              label: 'Flujo efectivo est.',
-              value: r.flujoEfectivoEstimado,
-              icon: r.flujoEfectivoEstimado >= 0
+              label: 'Movimiento neto de efectivo',
+              value: r.movimientoNetoEfectivo,
+              icon: r.movimientoNetoEfectivo >= 0
                   ? Icons.show_chart_rounded
                   : Icons.stacked_line_chart_rounded,
-              color: r.flujoEfectivoEstimado >= 0
+              color: r.movimientoNetoEfectivo >= 0
                   ? AppColors.successFg
                   : AppColors.errorFg,
             ),
           ],
         ),
+      ],
+    );
+  }
+}
+
+class _CashSection extends StatelessWidget {
+  const _CashSection({required this.caja});
+
+  final AccountingCash caja;
+
+  @override
+  Widget build(BuildContext context) {
+    final difference = caja.diferenciaCaja;
+    final differenceColor = difference == null || difference == 0
+        ? AppColors.successFg
+        : AppColors.errorFg;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionHeader(title: 'Caja'),
+        const SizedBox(height: 10),
+        AppCard(
+          child: Column(
+            children: [
+              _CashRow(
+                label: 'Saldo inicial',
+                value: Fmt.lempira(caja.saldoInicialCaja),
+              ),
+              _CashRow(
+                label: 'Movimiento neto',
+                value: Fmt.lempira(caja.movimientoNetoEfectivo),
+              ),
+              _CashRow(
+                label: 'Saldo final estimado',
+                value: Fmt.lempira(caja.saldoFinalEstimado),
+              ),
+              if (caja.efectivoContado != null)
+                _CashRow(
+                  label: 'Efectivo contado',
+                  value: Fmt.lempira(caja.efectivoContado!),
+                ),
+              if (difference != null)
+                _CashRow(
+                  label: 'Diferencia',
+                  value: Fmt.lempira(difference),
+                  valueColor: differenceColor,
+                  showDivider: false,
+                )
+              else
+                _CashRow(
+                  label: 'Estado',
+                  value: caja.isClosed ? 'Cerrada' : 'Abierta',
+                  showDivider: false,
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CashRow extends StatelessWidget {
+  const _CashRow({
+    required this.label,
+    required this.value,
+    this.valueColor,
+    this.showDivider = true,
+  });
+
+  final String label;
+  final String value;
+  final Color? valueColor;
+  final bool showDivider;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textMuted,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              value,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: valueColor ?? AppColors.textPrimary,
+              ),
+            ),
+          ],
+        ),
+        if (showDivider)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 10),
+            child: Divider(height: 1, color: AppColors.border),
+          ),
       ],
     );
   }
