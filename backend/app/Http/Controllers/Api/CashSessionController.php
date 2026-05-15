@@ -46,13 +46,94 @@ class CashSessionController extends Controller
 
     public function current(): JsonResponse
     {
-        $session = CashSession::with(['openedBy:id,name', 'closedBy:id,name'])
+        $tz = config('app.timezone');
+        $todayStart = now($tz)->startOfDay();
+        $todayEnd = $todayStart->copy()->endOfDay();
+
+        $openSession = CashSession::with(['openedBy:id,name', 'closedBy:id,name'])
             ->where('status', 'abierta')
-            ->orderByDesc('opened_at')
+            ->orderBy('opened_at')
+            ->orderBy('id')
             ->first();
 
+        if ($openSession) {
+            $pendingClosure = $openSession->opened_at->lt($todayStart);
+
+            return response()->json([
+                'cash_session' => $this->serializeCurrentSession($openSession, $todayEnd),
+                'message' => $pendingClosure ? 'Hay una caja pendiente de cierre.' : null,
+                'requires_first_cash_session' => false,
+                'pending_closure' => $pendingClosure,
+                'opened_automatically' => false,
+            ]);
+        }
+
+        $todaySession = CashSession::with(['openedBy:id,name', 'closedBy:id,name'])
+            ->whereBetween('opened_at', [$todayStart, $todayEnd])
+            ->orderByDesc('opened_at')
+            ->orderByDesc('id')
+            ->first();
+
+        if ($todaySession) {
+            return response()->json([
+                'cash_session' => $this->serializeCurrentSession($todaySession, $todayEnd),
+                'message' => null,
+                'requires_first_cash_session' => false,
+                'pending_closure' => false,
+                'opened_automatically' => false,
+            ]);
+        }
+
+        $lastSession = CashSession::with(['openedBy:id,name', 'closedBy:id,name'])
+            ->orderByDesc('closed_at')
+            ->orderByDesc('opened_at')
+            ->orderByDesc('id')
+            ->first();
+
+        if (! $lastSession) {
+            return response()->json([
+                'cash_session' => null,
+                'message' => 'No existe ninguna caja previa. El administrador debe crear la primera caja.',
+                'requires_first_cash_session' => true,
+                'pending_closure' => false,
+                'opened_automatically' => false,
+            ]);
+        }
+
+        if ($lastSession->status !== 'cerrada') {
+            return response()->json([
+                'cash_session' => $this->serializeCurrentSession($lastSession, $todayEnd),
+                'message' => 'Hay una caja pendiente de cierre.',
+                'requires_first_cash_session' => false,
+                'pending_closure' => true,
+                'opened_automatically' => false,
+            ]);
+        }
+
+        if ($lastSession->counted_closing_amount === null) {
+            return response()->json([
+                'cash_session' => null,
+                'message' => 'La última caja cerrada no tiene efectivo contado.',
+                'requires_first_cash_session' => false,
+                'pending_closure' => false,
+                'opened_automatically' => false,
+            ], 422);
+        }
+
+        $session = CashSession::create([
+            'opening_amount' => round((float) $lastSession->counted_closing_amount, 2),
+            'opened_at' => $todayStart,
+            'status' => 'abierta',
+            'opened_by' => null,
+            'notes' => 'Caja abierta automáticamente desde el cierre anterior',
+        ])->load(['openedBy:id,name', 'closedBy:id,name']);
+
         return response()->json([
-            'cash_session' => $session ? $this->serializeSession($session) : null,
+            'cash_session' => $this->serializeCurrentSession($session, $todayEnd),
+            'message' => null,
+            'requires_first_cash_session' => false,
+            'pending_closure' => false,
+            'opened_automatically' => true,
         ]);
     }
 
@@ -61,6 +142,12 @@ class CashSessionController extends Controller
         if (CashSession::where('status', 'abierta')->exists()) {
             return response()->json([
                 'message' => 'Ya existe una caja abierta. Debes cerrarla antes de abrir otra.',
+            ], 422);
+        }
+
+        if (CashSession::exists()) {
+            return response()->json([
+                'message' => 'La primera caja ya fue creada. Las siguientes cajas se abren automáticamente desde el cierre anterior.',
             ], 422);
         }
 
@@ -166,5 +253,29 @@ class CashSessionController extends Controller
             ] : null,
             'notes' => $session->notes,
         ];
+    }
+
+    private function serializeCurrentSession(CashSession $session, Carbon $expectedAt): array
+    {
+        $data = $this->serializeSession($session);
+
+        $movement = $this->reportService->cashMovementBetween(
+            $session->opened_at->copy()->startOfDay(),
+            ($session->closed_at ?? $expectedAt)->copy()->endOfDay(),
+        );
+
+        $data['movimiento_neto_efectivo'] = (float) $movement['movimiento_neto_efectivo'];
+
+        if ($session->status === 'abierta') {
+            $expectedClosing = $this->reportService->calculateExpectedClosing(
+                (float) $session->opening_amount,
+                (float) $movement['movimiento_neto_efectivo'],
+            );
+
+            $data['expected_closing_amount'] = $expectedClosing;
+            $data['saldo_final_estimado'] = $expectedClosing;
+        }
+
+        return $data;
     }
 }

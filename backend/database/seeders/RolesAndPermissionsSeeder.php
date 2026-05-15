@@ -47,6 +47,10 @@ class RolesAndPermissionsSeeder extends Seeder
             // Reportes contables
             'report.view',
 
+            // Caja
+            'cash.view',
+            'cash.manage',
+
             // Usuarios del sistema
             'user.manage',
         ];
@@ -63,6 +67,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'wash.view',
             'wash.create',
             'advance.view',
+            'cash.view',
         ]);
     }
 }

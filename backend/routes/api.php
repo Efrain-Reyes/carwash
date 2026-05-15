@@ -95,11 +95,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('reports/accounting/timeline', [ReportController::class, 'accountingTimeline'])->middleware('can:report.view');
 
     // Caja
-    Route::get('cash-sessions', [CashSessionController::class, 'index'])->middleware('can:report.view');
-    Route::get('cash-sessions/current', [CashSessionController::class, 'current'])->middleware('can:report.view');
-    Route::post('cash-sessions', [CashSessionController::class, 'store'])->middleware('can:report.view');
-    Route::get('cash-sessions/{cashSession}', [CashSessionController::class, 'show'])->middleware('can:report.view');
-    Route::patch('cash-sessions/{cashSession}/close', [CashSessionController::class, 'close'])->middleware('can:report.view');
+    Route::get('cash-sessions/current', [CashSessionController::class, 'current'])->middleware('can:cash.view');
+    Route::get('cash-sessions', [CashSessionController::class, 'index'])->middleware('can:cash.manage');
+    Route::post('cash-sessions', [CashSessionController::class, 'store'])->middleware('can:cash.manage');
+    Route::get('cash-sessions/{cashSession}', [CashSessionController::class, 'show'])->middleware('can:cash.manage');
+    Route::patch('cash-sessions/{cashSession}/close', [CashSessionController::class, 'close'])->middleware('can:cash.manage');
 
     // Gastos
     Route::get('expenses', [ExpenseController::class, 'index'])->middleware('can:expense.view');
