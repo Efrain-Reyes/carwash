@@ -53,6 +53,22 @@ class HomeProvider extends ChangeNotifier {
         'No se pudo conectar con el servidor.\nVerifica tu red e intenta de nuevo.';
 
     try {
+      _cashState = await ReportsService.getCurrentCashSession();
+      _cashError = null;
+      debugPrint(
+        '[HomeProvider] cash state: ${_cashState?.cashSession?.status}',
+      );
+    } on DioException catch (e) {
+      debugPrint('[HomeProvider] cash DioException: ${e.response?.statusCode}');
+      cashFailed = true;
+      _cashError = _parseDioError(e);
+    } catch (_) {
+      debugPrint('[HomeProvider] unexpected error loading cash');
+      cashFailed = true;
+      _cashError = 'No se pudo cargar la caja del día.';
+    }
+
+    try {
       _report = await ReportsService.getAccounting(
         dateFrom: today,
         dateTo: today,
@@ -70,22 +86,6 @@ class HomeProvider extends ChangeNotifier {
       debugPrint('[HomeProvider] unexpected error loading report');
       reportFailed = true;
       fatalError = 'Error inesperado al cargar los datos.';
-    }
-
-    try {
-      _cashState = await ReportsService.getCurrentCashSession();
-      _cashError = null;
-      debugPrint(
-        '[HomeProvider] cash state: ${_cashState?.cashSession?.status}',
-      );
-    } on DioException catch (e) {
-      debugPrint('[HomeProvider] cash DioException: ${e.response?.statusCode}');
-      cashFailed = true;
-      _cashError = _parseDioError(e);
-    } catch (_) {
-      debugPrint('[HomeProvider] unexpected error loading cash');
-      cashFailed = true;
-      _cashError = 'No se pudo cargar la caja del día.';
     }
 
     try {

@@ -56,6 +56,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
     final dateTo = Fmt.dateApi(_dateTo);
 
     try {
+      await _ensureCurrentCashSession();
+
       final report = await ReportsService.getAccounting(
         dateFrom: dateFrom,
         dateTo: dateTo,
@@ -87,6 +89,25 @@ class _ReportsScreenState extends State<ReportsScreen> {
     }
 
     await _loadTimeline(showLoading: false);
+  }
+
+  Future<void> _ensureCurrentCashSession() async {
+    final today = DateTime.now();
+    final todayOnly = DateTime(today.year, today.month, today.day);
+    final fromOnly = DateTime(_dateFrom.year, _dateFrom.month, _dateFrom.day);
+    final toOnly = DateTime(_dateTo.year, _dateTo.month, _dateTo.day);
+
+    if (todayOnly.isBefore(fromOnly) || todayOnly.isAfter(toOnly)) return;
+
+    try {
+      await ReportsService.getCurrentCashSession();
+    } on DioException catch (e) {
+      debugPrint(
+        '[ReportsScreen] Current cash DioException: ${e.response?.statusCode}',
+      );
+    } catch (e) {
+      debugPrint('[ReportsScreen] Current cash unexpected error: $e');
+    }
   }
 
   Future<void> _loadTimeline({bool showLoading = true}) async {
