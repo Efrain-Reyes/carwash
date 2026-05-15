@@ -61,6 +61,23 @@ class CashSessionFlowTest extends TestCase
         $this->assertDatabaseCount('cash_sessions', 1);
     }
 
+    public function test_report_returns_cash_section_when_cash_exists_in_selected_range(): void
+    {
+        $this->actingAs($this->admin(), 'sanctum')
+            ->postJson('/api/cash-sessions', [
+                'opening_amount' => 350,
+            ])
+            ->assertCreated();
+
+        $this->actingAs($this->admin(), 'sanctum')
+            ->getJson('/api/reports/accounting?date_from=2026-05-15&date_to=2026-05-15')
+            ->assertOk()
+            ->assertJsonPath('caja.status', 'abierta')
+            ->assertJsonPath('caja.saldo_inicial_caja', 350)
+            ->assertJsonPath('caja.movimiento_neto_efectivo', 0)
+            ->assertJsonPath('caja.saldo_final_estimado', 350);
+    }
+
     public function test_current_opens_today_from_last_counted_closing_amount(): void
     {
         CashSession::create([
