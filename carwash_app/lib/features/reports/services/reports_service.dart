@@ -42,4 +42,44 @@ class ReportsService {
     print('Timeline points: ${timeline.timeline.length}');
     return timeline;
   }
+
+  static Future<CurrentCashSessionResponse> getCurrentCashSession() async {
+    final response = await ApiClient.instance.get('/cash-sessions/current');
+    return CurrentCashSessionResponse.fromJson(
+      response.data as Map<String, dynamic>,
+    );
+  }
+
+  static Future<AccountingCash> createCashSession({
+    required double openingAmount,
+    String? notes,
+  }) async {
+    final response = await ApiClient.instance.post(
+      '/cash-sessions',
+      data: {
+        'opening_amount': openingAmount,
+        if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+      },
+    );
+    return AccountingCash.fromJson(
+      response.data['cash_session'] as Map<String, dynamic>,
+    );
+  }
+
+  static Future<AccountingCash> closeCashSession({
+    required int id,
+    required double countedClosingAmount,
+    String? notes,
+  }) async {
+    final response = await ApiClient.instance.patch(
+      '/cash-sessions/$id/close',
+      data: {
+        'counted_closing_amount': countedClosingAmount,
+        if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+      },
+    );
+    return AccountingCash.fromJson(
+      response.data['cash_session'] as Map<String, dynamic>,
+    );
+  }
 }

@@ -9,14 +9,20 @@ import '../../washes/services/washes_service.dart';
 
 class HomeProvider extends ChangeNotifier {
   AccountingReport? _report;
+  CurrentCashSessionResponse? _cashState;
   List<WashItem> _recentWashes = [];
   bool _loading = false;
+  bool _cashActionLoading = false;
   String? _error;
+  String? _cashError;
 
-  AccountingReport?  get report       => _report;
-  List<WashItem>     get recentWashes => _recentWashes;
-  bool               get loading      => _loading;
-  String?            get error        => _error;
+  AccountingReport? get report => _report;
+  CurrentCashSessionResponse? get cashState => _cashState;
+  List<WashItem> get recentWashes => _recentWashes;
+  bool get loading => _loading;
+  bool get cashActionLoading => _cashActionLoading;
+  String? get error => _error;
+  String? get cashError => _cashError;
 
   /// Carga inicial — muestra spinner mientras carga.
   Future<void> loadToday() async {
@@ -41,21 +47,45 @@ class HomeProvider extends ChangeNotifier {
     final today = Fmt.dateApi(DateTime.now());
     debugPrint('[HomeProvider] fetching for $today (silent: $silent)');
 
+    var reportFailed = false;
+    var cashFailed = false;
+    var fatalError =
+        'No se pudo conectar con el servidor.\nVerifica tu red e intenta de nuevo.';
+
     try {
       _report = await ReportsService.getAccounting(
         dateFrom: today,
         dateTo: today,
       );
       debugPrint(
-          '[HomeProvider] report OK — ingresos: ${_report?.resumen.ingresosLavados}, lavados: ${_report?.lavados.cantidad}');
+        '[HomeProvider] report OK — ingresos: ${_report?.resumen.ingresosLavados}, lavados: ${_report?.lavados.cantidad}',
+      );
     } on DioException catch (e) {
       debugPrint('[HomeProvider] DioException: ${e.response?.statusCode}');
-      if (!silent) {
-        _error = 'No se pudo conectar con el servidor.\nVerifica tu red e intenta de nuevo.';
+      reportFailed = true;
+      if (e.response?.statusCode == 403) {
+        fatalError = '';
       }
     } catch (_) {
       debugPrint('[HomeProvider] unexpected error loading report');
-      if (!silent) _error = 'Error inesperado al cargar los datos.';
+      reportFailed = true;
+      fatalError = 'Error inesperado al cargar los datos.';
+    }
+
+    try {
+      _cashState = await ReportsService.getCurrentCashSession();
+      _cashError = null;
+      debugPrint(
+        '[HomeProvider] cash state: ${_cashState?.cashSession?.status}',
+      );
+    } on DioException catch (e) {
+      debugPrint('[HomeProvider] cash DioException: ${e.response?.statusCode}');
+      cashFailed = true;
+      _cashError = _parseDioError(e);
+    } catch (_) {
+      debugPrint('[HomeProvider] unexpected error loading cash');
+      cashFailed = true;
+      _cashError = 'No se pudo cargar la caja del día.';
     }
 
     try {
@@ -65,7 +95,79 @@ class HomeProvider extends ChangeNotifier {
       debugPrint('[HomeProvider] error loading washes (silent)');
     }
 
+    if (!silent) {
+      _error = reportFailed && cashFailed && fatalError.isNotEmpty
+          ? fatalError
+          : null;
+    }
+
     _loading = false;
     notifyListeners();
+  }
+
+  Future<bool> createFirstCashSession({
+    required double openingAmount,
+    String? notes,
+  }) async {
+    if (_cashActionLoading) return false;
+    _cashActionLoading = true;
+    _cashError = null;
+    notifyListeners();
+
+    try {
+      await ReportsService.createCashSession(
+        openingAmount: openingAmount,
+        notes: notes,
+      );
+      await _fetch(silent: true);
+      return true;
+    } on DioException catch (e) {
+      _cashError = _parseDioError(e);
+      return false;
+    } catch (_) {
+      _cashError = 'No se pudo crear la primera caja.';
+      return false;
+    } finally {
+      _cashActionLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> closeCashSession({
+    required int id,
+    required double countedClosingAmount,
+    String? notes,
+  }) async {
+    if (_cashActionLoading) return false;
+    _cashActionLoading = true;
+    _cashError = null;
+    notifyListeners();
+
+    try {
+      await ReportsService.closeCashSession(
+        id: id,
+        countedClosingAmount: countedClosingAmount,
+        notes: notes,
+      );
+      await _fetch(silent: true);
+      return true;
+    } on DioException catch (e) {
+      _cashError = _parseDioError(e);
+      return false;
+    } catch (_) {
+      _cashError = 'No se pudo cerrar la caja.';
+      return false;
+    } finally {
+      _cashActionLoading = false;
+      notifyListeners();
+    }
+  }
+
+  String _parseDioError(DioException e) {
+    final data = e.response?.data;
+    if (data is Map && data['message'] != null) {
+      return data['message'].toString();
+    }
+    return 'No se pudo conectar con el servidor.';
   }
 }

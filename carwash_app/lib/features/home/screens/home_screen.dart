@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -9,6 +10,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../shared/widgets/app_bottom_nav.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_card.dart';
+import '../../../shared/widgets/app_text_field.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../../shared/widgets/status_badge.dart';
 import '../../../shared/widgets/summary_card.dart';
@@ -80,6 +82,233 @@ class _HomeTabBodyState extends State<_HomeTabBody> {
     }
   }
 
+  double? _parseAmount(String value) {
+    final amount = double.tryParse(value.trim().replaceAll(',', '.'));
+    if (amount == null || amount < 0) return null;
+    return amount;
+  }
+
+  Future<void> _showCreateFirstCashDialog() async {
+    final amountController = TextEditingController();
+    final notesController = TextEditingController();
+    final homeProvider = context.read<HomeProvider>();
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    String? error;
+    var submitting = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            Future<void> submit() async {
+              final amount = _parseAmount(amountController.text);
+              if (amount == null) {
+                setDialogState(
+                  () => error = 'Ingresa un efectivo inicial válido.',
+                );
+                return;
+              }
+
+              setDialogState(() {
+                submitting = true;
+                error = null;
+              });
+
+              final ok = await homeProvider.createFirstCashSession(
+                openingAmount: amount,
+                notes: notesController.text,
+              );
+
+              if (!mounted) return;
+
+              if (ok) {
+                navigator.pop();
+                messenger.showSnackBar(
+                  const SnackBar(content: Text('Primera caja creada.')),
+                );
+                return;
+              }
+
+              setDialogState(() {
+                submitting = false;
+                error = homeProvider.cashError;
+              });
+            }
+
+            return AlertDialog(
+              title: const Text('Crear primera caja'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AppTextField(
+                    label: 'Efectivo inicial',
+                    hint: '0.00',
+                    controller: amountController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  AppTextField(
+                    label: 'Notas',
+                    hint: 'Opcional',
+                    controller: notesController,
+                    maxLines: 3,
+                  ),
+                  if (error != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      error!,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.errorFg,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: submitting
+                      ? null
+                      : () => Navigator.of(context).pop(),
+                  child: const Text('Cancelar'),
+                ),
+                AppButton(
+                  label: 'Crear',
+                  onPressed: submitting ? null : submit,
+                  fullWidth: false,
+                  size: AppButtonSize.sm,
+                  loading: submitting,
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    amountController.dispose();
+    notesController.dispose();
+  }
+
+  Future<void> _showCloseCashDialog(AccountingCash cash) async {
+    final countedController = TextEditingController();
+    final notesController = TextEditingController();
+    final homeProvider = context.read<HomeProvider>();
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    String? error;
+    var submitting = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            Future<void> submit() async {
+              final counted = _parseAmount(countedController.text);
+              if (counted == null) {
+                setDialogState(
+                  () => error = 'Ingresa un efectivo contado válido.',
+                );
+                return;
+              }
+
+              setDialogState(() {
+                submitting = true;
+                error = null;
+              });
+
+              final ok = await homeProvider.closeCashSession(
+                id: cash.id,
+                countedClosingAmount: counted,
+                notes: notesController.text,
+              );
+
+              if (!mounted) return;
+
+              if (ok) {
+                navigator.pop();
+                messenger.showSnackBar(
+                  const SnackBar(content: Text('Caja cerrada.')),
+                );
+                return;
+              }
+
+              setDialogState(() {
+                submitting = false;
+                error = homeProvider.cashError;
+              });
+            }
+
+            return AlertDialog(
+              title: const Text('Cerrar caja'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AppTextField(
+                    label: 'Efectivo contado',
+                    hint: '0.00',
+                    controller: countedController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  AppTextField(
+                    label: 'Notas',
+                    hint: 'Opcional',
+                    controller: notesController,
+                    maxLines: 3,
+                  ),
+                  if (error != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      error!,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.errorFg,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: submitting
+                      ? null
+                      : () => Navigator.of(context).pop(),
+                  child: const Text('Cancelar'),
+                ),
+                AppButton(
+                  label: 'Cerrar',
+                  onPressed: submitting ? null : submit,
+                  fullWidth: false,
+                  size: AppButtonSize.sm,
+                  loading: submitting,
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    countedController.dispose();
+    notesController.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final home = context.watch<HomeProvider>();
@@ -88,12 +317,16 @@ class _HomeTabBodyState extends State<_HomeTabBody> {
     return Column(
       children: [
         _Header(user: auth.user?.name ?? '', report: home.report),
-        Expanded(child: _buildBody(context, home)),
+        Expanded(child: _buildBody(context, home, auth)),
       ],
     );
   }
 
-  Widget _buildBody(BuildContext context, HomeProvider home) {
+  Widget _buildBody(
+    BuildContext context,
+    HomeProvider home,
+    AuthProvider auth,
+  ) {
     if (home.loading) {
       return const Center(
         child: CircularProgressIndicator(color: AppColors.accent),
@@ -104,9 +337,15 @@ class _HomeTabBodyState extends State<_HomeTabBody> {
     }
     return _Content(
       report: home.report,
+      cashState: home.cashState,
+      cashError: home.cashError,
+      cashActionLoading: home.cashActionLoading,
+      isAdmin: auth.user?.isAdmin ?? false,
       recentWashes: home.recentWashes,
       onTabChange: widget.onTabChange,
       onRegisterWash: _goToRegisterWash,
+      onCreateFirstCash: _showCreateFirstCashDialog,
+      onCloseCash: _showCloseCashDialog,
     );
   }
 }
@@ -202,15 +441,27 @@ class _Header extends StatelessWidget {
 class _Content extends StatelessWidget {
   const _Content({
     required this.report,
+    required this.cashState,
+    required this.cashError,
+    required this.cashActionLoading,
+    required this.isAdmin,
     required this.recentWashes,
     required this.onTabChange,
     required this.onRegisterWash,
+    required this.onCreateFirstCash,
+    required this.onCloseCash,
   });
 
   final AccountingReport? report;
+  final CurrentCashSessionResponse? cashState;
+  final String? cashError;
+  final bool cashActionLoading;
+  final bool isAdmin;
   final List<WashItem> recentWashes;
   final ValueChanged<NavTab> onTabChange;
   final VoidCallback onRegisterWash;
+  final VoidCallback onCreateFirstCash;
+  final ValueChanged<AccountingCash> onCloseCash;
 
   @override
   Widget build(BuildContext context) {
@@ -278,6 +529,17 @@ class _Content extends StatelessWidget {
 
           const SizedBox(height: 16),
 
+          _CashDayCard(
+            state: cashState,
+            error: cashError,
+            isAdmin: isAdmin,
+            actionLoading: cashActionLoading,
+            onCreateFirstCash: onCreateFirstCash,
+            onCloseCash: onCloseCash,
+          ),
+
+          const SizedBox(height: 16),
+
           // Register wash CTA
           _RegisterWashBtn(onTap: onRegisterWash),
 
@@ -330,6 +592,226 @@ class _Content extends StatelessWidget {
           _RecentWashes(washes: recentWashes),
 
           const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Cash day card ───────────────────────────────────────────────────────────
+
+class _CashDayCard extends StatelessWidget {
+  const _CashDayCard({
+    required this.state,
+    required this.error,
+    required this.isAdmin,
+    required this.actionLoading,
+    required this.onCreateFirstCash,
+    required this.onCloseCash,
+  });
+
+  final CurrentCashSessionResponse? state;
+  final String? error;
+  final bool isAdmin;
+  final bool actionLoading;
+  final VoidCallback onCreateFirstCash;
+  final ValueChanged<AccountingCash> onCloseCash;
+
+  @override
+  Widget build(BuildContext context) {
+    final cash = state?.cashSession;
+    final requiresFirst = state?.requiresFirstCashSession ?? false;
+    final pendingClosure = state?.pendingClosure ?? false;
+    final status = _statusLabel(cash, requiresFirst);
+    final statusColor = cash?.isOpen == true
+        ? AppColors.successFg
+        : cash?.isClosed == true
+        ? AppColors.textMuted
+        : AppColors.warningFg;
+    final message =
+        error ??
+        (isAdmin && pendingClosure
+            ? 'Hay una caja pendiente de cierre.'
+            : requiresFirst
+            ? (isAdmin
+                  ? 'Crea la primera caja para iniciar el flujo diario.'
+                  : 'La caja aún no ha sido inicializada por un administrador.')
+            : null);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionHeader(title: 'Caja del día'),
+        const SizedBox(height: 10),
+        AppCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: AppColors.infoBg,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.point_of_sale_rounded,
+                      color: AppColors.infoFg,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          status,
+                          style: GoogleFonts.inter(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: statusColor,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          cash?.openedAt == null
+                              ? 'Sin apertura registrada'
+                              : 'Apertura ${Fmt.dateFull(cash!.openedAt!)}',
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              if (message != null && message.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: error == null
+                        ? AppColors.warningBg
+                        : AppColors.errorBg,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    message,
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: error == null
+                          ? AppColors.warningFg
+                          : AppColors.errorFg,
+                    ),
+                  ),
+                ),
+              ],
+              if (cash != null) ...[
+                const SizedBox(height: 12),
+                const Divider(height: 1, color: AppColors.border),
+                const SizedBox(height: 12),
+                _CashInfoRow(
+                  label: 'Saldo inicial',
+                  value: Fmt.lempira(cash.saldoInicialCaja),
+                ),
+                _CashInfoRow(
+                  label: 'Dinero esperado en caja',
+                  value: Fmt.lempira(cash.saldoFinalEstimado),
+                ),
+                if (cash.efectivoContado != null)
+                  _CashInfoRow(
+                    label: 'Efectivo contado',
+                    value: Fmt.lempira(cash.efectivoContado!),
+                  ),
+                if (cash.diferenciaCaja != null)
+                  _CashInfoRow(
+                    label: 'Diferencia de caja',
+                    value: Fmt.lempira(cash.diferenciaCaja!),
+                    valueColor: cash.diferenciaCaja == 0
+                        ? AppColors.successFg
+                        : AppColors.errorFg,
+                  ),
+              ],
+              if (isAdmin && requiresFirst) ...[
+                const SizedBox(height: 14),
+                AppButton(
+                  label: 'Crear primera caja',
+                  onPressed: actionLoading ? null : onCreateFirstCash,
+                  icon: Icons.add_rounded,
+                  size: AppButtonSize.sm,
+                  loading: actionLoading,
+                ),
+              ] else if (isAdmin && cash?.isOpen == true) ...[
+                const SizedBox(height: 14),
+                AppButton(
+                  label: 'Cerrar caja',
+                  onPressed: actionLoading ? null : () => onCloseCash(cash!),
+                  icon: Icons.lock_rounded,
+                  size: AppButtonSize.sm,
+                  loading: actionLoading,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _statusLabel(AccountingCash? cash, bool requiresFirst) {
+    if (cash?.isOpen == true) return 'Caja abierta';
+    if (cash?.isClosed == true) return 'Caja cerrada';
+    if (requiresFirst) return 'Caja no inicializada';
+    return 'Sin caja activa';
+  }
+}
+
+class _CashInfoRow extends StatelessWidget {
+  const _CashInfoRow({
+    required this.label,
+    required this.value,
+    this.valueColor,
+  });
+
+  final String label;
+  final String value;
+  final Color? valueColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textMuted,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            value,
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: valueColor ?? AppColors.textPrimary,
+            ),
+          ),
         ],
       ),
     );

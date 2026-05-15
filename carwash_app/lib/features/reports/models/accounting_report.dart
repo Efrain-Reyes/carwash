@@ -96,23 +96,60 @@ class AccountingCash {
   });
 
   bool get isClosed => status == 'cerrada';
+  bool get isOpen => status == 'abierta';
 
   factory AccountingCash.fromJson(Map<String, dynamic> json) {
     return AccountingCash(
       id: _asInt(json['id']),
       status: json['status']?.toString() ?? '',
-      saldoInicialCaja: _asDouble(json['saldo_inicial_caja']),
+      saldoInicialCaja: _asDouble(
+        json['saldo_inicial_caja'] ?? json['opening_amount'],
+      ),
       movimientoNetoEfectivo: _asDouble(json['movimiento_neto_efectivo']),
-      saldoFinalEstimado: _asDouble(json['saldo_final_estimado']),
-      efectivoContado: json['efectivo_contado'] == null
+      saldoFinalEstimado: _asDouble(
+        json['saldo_final_estimado'] ?? json['expected_closing_amount'],
+      ),
+      efectivoContado:
+          (json['efectivo_contado'] ?? json['counted_closing_amount']) == null
           ? null
-          : _asDouble(json['efectivo_contado']),
-      diferenciaCaja: json['diferencia_caja'] == null
+          : _asDouble(
+              json['efectivo_contado'] ?? json['counted_closing_amount'],
+            ),
+      diferenciaCaja: (json['diferencia_caja'] ?? json['difference']) == null
           ? null
-          : _asDouble(json['diferencia_caja']),
+          : _asDouble(json['diferencia_caja'] ?? json['difference']),
       openedAt: _asDate(json['opened_at']),
       closedAt: _asDate(json['closed_at']),
       notes: json['notes']?.toString(),
+    );
+  }
+}
+
+class CurrentCashSessionResponse {
+  final AccountingCash? cashSession;
+  final String? message;
+  final bool requiresFirstCashSession;
+  final bool pendingClosure;
+  final bool openedAutomatically;
+
+  const CurrentCashSessionResponse({
+    required this.cashSession,
+    this.message,
+    required this.requiresFirstCashSession,
+    required this.pendingClosure,
+    required this.openedAutomatically,
+  });
+
+  factory CurrentCashSessionResponse.fromJson(Map<String, dynamic> json) {
+    final cashSession = json['cash_session'];
+    return CurrentCashSessionResponse(
+      cashSession: cashSession is Map<String, dynamic>
+          ? AccountingCash.fromJson(cashSession)
+          : null,
+      message: json['message']?.toString(),
+      requiresFirstCashSession: json['requires_first_cash_session'] == true,
+      pendingClosure: json['pending_closure'] == true,
+      openedAutomatically: json['opened_automatically'] == true,
     );
   }
 }

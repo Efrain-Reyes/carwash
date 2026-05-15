@@ -478,7 +478,7 @@ class _CashSection extends StatelessWidget {
                 value: Fmt.lempira(caja.movimientoNetoEfectivo),
               ),
               _CashRow(
-                label: 'Saldo final estimado',
+                label: 'Dinero esperado en caja',
                 value: Fmt.lempira(caja.saldoFinalEstimado),
               ),
               if (caja.efectivoContado != null)
@@ -488,7 +488,7 @@ class _CashSection extends StatelessWidget {
                 ),
               if (difference != null)
                 _CashRow(
-                  label: 'Diferencia',
+                  label: 'Diferencia de caja',
                   value: Fmt.lempira(difference),
                   valueColor: differenceColor,
                   showDivider: false,
