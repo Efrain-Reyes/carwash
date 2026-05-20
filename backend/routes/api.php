@@ -100,6 +100,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('cash-sessions', [CashSessionController::class, 'store'])->middleware('can:cash.manage');
     Route::get('cash-sessions/{cashSession}', [CashSessionController::class, 'show'])->middleware('can:cash.manage');
     Route::patch('cash-sessions/{cashSession}/close', [CashSessionController::class, 'close'])->middleware('can:cash.manage');
+    Route::patch('cash-sessions/{cashSession}/closing-adjustment', [CashSessionController::class, 'adjustClosing'])->middleware('can:cash.manage');
 
     // Gastos
     Route::get('expenses', [ExpenseController::class, 'index'])->middleware('can:expense.view');

@@ -15,6 +15,8 @@ import '../../../shared/widgets/section_header.dart';
 import '../../../shared/widgets/status_badge.dart';
 import '../../../shared/widgets/summary_card.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../cash/screens/cash_sessions_screen.dart';
+import '../../expenses/models/expense_model.dart';
 import '../../expenses/screens/expenses_screen.dart';
 import '../../payroll/screens/payroll_screen.dart';
 import '../../reports/models/accounting_report.dart';
@@ -46,6 +48,7 @@ class _HomeScreenState extends State<HomeScreen> {
           const WashesScreen(),
           const ExpensesScreen(),
           const PayrollScreen(),
+          const CashSessionsScreen(),
           const ReportsScreen(),
         ],
       ),
@@ -202,21 +205,35 @@ class _HomeTabBodyState extends State<_HomeTabBody> {
     final countedController = TextEditingController();
     final notesController = TextEditingController();
     final homeProvider = context.read<HomeProvider>();
+    final report = homeProvider.report;
+    final washes = homeProvider.recentWashes
+        .where((wash) => wash.isCompleted)
+        .toList();
+    final expenses = homeProvider.todayExpenses
+        .where((expense) => expense.isActive)
+        .toList();
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
     String? error;
     var submitting = false;
+    var countedText = '';
 
     await showDialog<void>(
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            final counted = _parseAmount(countedText);
+            final difference = counted == null
+                ? null
+                : counted - cash.saldoFinalEstimado;
+
             Future<void> submit() async {
               final counted = _parseAmount(countedController.text);
               if (counted == null) {
                 setDialogState(
-                  () => error = 'Ingresa un efectivo contado válido.',
+                  () => error =
+                      'Ingresa un efectivo total contado en caja válido.',
                 );
                 return;
               }
@@ -250,39 +267,58 @@ class _HomeTabBodyState extends State<_HomeTabBody> {
 
             return AlertDialog(
               title: const Text('Cerrar caja'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  AppTextField(
-                    label: 'Efectivo contado',
-                    hint: '0.00',
-                    controller: countedController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    inputFormatters: [
-                      FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  AppTextField(
-                    label: 'Notas',
-                    hint: 'Opcional',
-                    controller: notesController,
-                    maxLines: 3,
-                  ),
-                  if (error != null) ...[
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _CloseCashSummary(report: report, cash: cash),
                     const SizedBox(height: 12),
-                    Text(
-                      error!,
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.errorFg,
+                    _CloseCashHelpText(),
+                    const SizedBox(height: 12),
+                    if (difference != null) ...[
+                      _DifferenceBox(difference: difference),
+                      const SizedBox(height: 12),
+                    ],
+                    AppTextField(
+                      label: 'Efectivo total contado en caja',
+                      hint: 'Ej. 1500.00',
+                      controller: countedController,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
                       ),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+                      ],
+                      onChanged: (value) =>
+                          setDialogState(() => countedText = value),
                     ),
+                    const SizedBox(height: 6),
+                    _CloseCashInputHelp(),
+                    const SizedBox(height: 14),
+                    _DayWashesList(washes: washes),
+                    const SizedBox(height: 12),
+                    _DayExpensesList(expenses: expenses),
+                    const SizedBox(height: 12),
+                    AppTextField(
+                      label: 'Notas',
+                      hint: 'Opcional',
+                      controller: notesController,
+                      maxLines: 3,
+                    ),
+                    if (error != null) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        error!,
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.errorFg,
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
               actions: [
                 TextButton(
@@ -730,7 +766,7 @@ class _CashDayCard extends StatelessWidget {
                 ),
                 if (cash.efectivoContado != null)
                   _CashInfoRow(
-                    label: 'Efectivo contado',
+                    label: 'Efectivo total contado en caja',
                     value: Fmt.lempira(cash.efectivoContado!),
                   ),
                 if (cash.diferenciaCaja != null)
@@ -816,6 +852,324 @@ class _CashInfoRow extends StatelessWidget {
       ),
     );
   }
+}
+
+class _CloseCashSummary extends StatelessWidget {
+  const _CloseCashSummary({required this.report, required this.cash});
+
+  final AccountingReport? report;
+  final AccountingCash cash;
+
+  @override
+  Widget build(BuildContext context) {
+    final resumen = report?.resumen;
+
+    return AppCard(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        children: [
+          _CloseSummaryRow(
+            label: 'Saldo inicial de caja',
+            value: Fmt.lempira(cash.saldoInicialCaja),
+          ),
+          _CloseSummaryRow(
+            label: 'Total lavados del día',
+            value: Fmt.lempira(resumen?.ingresosLavados ?? 0),
+          ),
+          _CloseSummaryRow(
+            label: 'Total gastos del día',
+            value: Fmt.lempira(resumen?.totalGastos ?? 0),
+          ),
+          _CloseSummaryRow(
+            label: 'Adelantos entregados',
+            value: Fmt.lempira(resumen?.adelantosEntregados ?? 0),
+          ),
+          _CloseSummaryRow(
+            label: 'Nómina pagada',
+            value: Fmt.lempira(resumen?.nominaNetaPagada ?? 0),
+          ),
+          _CloseSummaryRow(
+            label: 'Abonos recibidos',
+            value: Fmt.lempira(resumen?.abonosRecibidos ?? 0),
+          ),
+          _CloseSummaryRow(
+            label: 'Movimiento neto de efectivo',
+            value: Fmt.lempira(resumen?.movimientoNetoEfectivo ?? 0),
+          ),
+          const Divider(height: 18, color: AppColors.border),
+          _CloseSummaryRow(
+            label: 'Dinero esperado en caja',
+            value: Fmt.lempira(cash.saldoFinalEstimado),
+            valueColor: AppColors.primary,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CloseSummaryRow extends StatelessWidget {
+  const _CloseSummaryRow({
+    required this.label,
+    required this.value,
+    this.valueColor,
+  });
+
+  final String label;
+  final String value;
+  final Color? valueColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 7),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textMuted,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            value,
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: valueColor ?? AppColors.textPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CloseCashHelpText extends StatelessWidget {
+  const _CloseCashHelpText();
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      'Ingrese todo el dinero físico que hay en caja al cerrar, no solo lo vendido en el día.',
+      style: GoogleFonts.inter(
+        fontSize: 12,
+        height: 1.35,
+        fontWeight: FontWeight.w700,
+        color: AppColors.textMuted,
+      ),
+    );
+  }
+}
+
+class _CloseCashInputHelp extends StatelessWidget {
+  const _CloseCashInputHelp();
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      'Debe incluir el saldo inicial más ingresos, menos gastos, adelantos y nómina.',
+      style: GoogleFonts.inter(
+        fontSize: 11,
+        height: 1.35,
+        fontWeight: FontWeight.w600,
+        color: AppColors.textMuted,
+      ),
+    );
+  }
+}
+
+class _DifferenceBox extends StatelessWidget {
+  const _DifferenceBox({required this.difference});
+
+  final double difference;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _differenceColor(difference);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withAlpha(18),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        '${_differenceLabel(difference)}: ${Fmt.lempira(difference)}',
+        style: GoogleFonts.inter(
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+          color: color,
+        ),
+      ),
+    );
+  }
+}
+
+class _DayWashesList extends StatelessWidget {
+  const _DayWashesList({required this.washes});
+
+  final List<WashItem> washes;
+
+  @override
+  Widget build(BuildContext context) {
+    return _DetailListShell(
+      title: 'Lavados del día',
+      empty: 'Sin lavados registrados.',
+      children: [
+        for (final wash in washes)
+          _SmallDetailRow(
+            title: '${wash.timeFormatted} · ${wash.vehicleTypeName}',
+            subtitle: wash.displayService,
+            value: Fmt.lempira(wash.price),
+          ),
+      ],
+    );
+  }
+}
+
+class _DayExpensesList extends StatelessWidget {
+  const _DayExpensesList({required this.expenses});
+
+  final List<Expense> expenses;
+
+  @override
+  Widget build(BuildContext context) {
+    return _DetailListShell(
+      title: 'Gastos del día',
+      empty: 'Sin gastos registrados.',
+      children: [
+        for (final expense in expenses)
+          _SmallDetailRow(
+            title: _expenseTitle(expense),
+            subtitle: Fmt.dateFull(expense.expenseDate),
+            value: Fmt.lempira(expense.total),
+          ),
+      ],
+    );
+  }
+}
+
+class _DetailListShell extends StatelessWidget {
+  const _DetailListShell({
+    required this.title,
+    required this.empty,
+    required this.children,
+  });
+
+  final String title;
+  final String empty;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (children.isEmpty)
+            Text(
+              empty,
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: AppColors.textMuted,
+              ),
+            )
+          else
+            ...children,
+        ],
+      ),
+    );
+  }
+}
+
+class _SmallDetailRow extends StatelessWidget {
+  const _SmallDetailRow({
+    required this.title,
+    required this.subtitle,
+    required this.value,
+  });
+
+  final String title;
+  final String subtitle;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    color: AppColors.textMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            value,
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: AppColors.textPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _expenseTitle(Expense expense) {
+  if (expense.items.isNotEmpty) {
+    return expense.items.first.description;
+  }
+  if (expense.supplierName.isNotEmpty) return expense.supplierName;
+  return 'Gasto #${expense.id}';
+}
+
+String _differenceLabel(double difference) {
+  if (difference < 0) return 'Faltante de caja';
+  if (difference > 0) return 'Sobrante de caja';
+  return 'Caja cuadrada';
+}
+
+Color _differenceColor(double difference) {
+  if (difference < 0) return AppColors.errorFg;
+  if (difference > 0) return AppColors.warningFg;
+  return AppColors.successFg;
 }
 
 // ─── Register wash CTA ────────────────────────────────────────────────────────

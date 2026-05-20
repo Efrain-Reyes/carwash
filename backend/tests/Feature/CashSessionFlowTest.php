@@ -175,6 +175,94 @@ class CashSessionFlowTest extends TestCase
             ->assertJsonPath('cash_session.notes', 'Faltante revisado');
     }
 
+    public function test_admin_can_adjust_closed_cash_session_and_update_next_opening_cash(): void
+    {
+        $admin = $this->admin();
+        $closed = CashSession::create([
+            'opening_amount' => 100,
+            'expected_closing_amount' => 100,
+            'counted_closing_amount' => 100,
+            'difference' => 0,
+            'opened_at' => Carbon::parse('2026-05-14 08:00:00', config('app.timezone')),
+            'closed_at' => Carbon::parse('2026-05-14 20:00:00', config('app.timezone')),
+            'status' => 'cerrada',
+            'notes' => 'Cierre original',
+        ]);
+        $nextOpen = CashSession::create([
+            'opening_amount' => 100,
+            'opened_at' => Carbon::parse('2026-05-15 00:00:00', config('app.timezone')),
+            'status' => 'abierta',
+        ]);
+
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson("/api/cash-sessions/{$closed->id}/closing-adjustment", [
+                'counted_closing_amount' => 150,
+                'notes' => 'Conteo corregido',
+                'reason' => 'Se contó el total físico de caja.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('cash_session.counted_closing_amount', 150)
+            ->assertJsonPath('cash_session.difference', 50)
+            ->assertJsonPath('next_session_updated', true)
+            ->assertJsonPath('warning', null);
+
+        $this->assertDatabaseHas('cash_session_adjustments', [
+            'cash_session_id' => $closed->id,
+            'user_id' => $admin->id,
+            'old_counted_closing_amount' => 100,
+            'new_counted_closing_amount' => 150,
+            'old_difference' => 0,
+            'new_difference' => 50,
+            'old_notes' => 'Cierre original',
+            'new_notes' => 'Conteo corregido',
+            'reason' => 'Se contó el total físico de caja.',
+        ]);
+
+        $this->assertDatabaseHas('cash_sessions', [
+            'id' => $nextOpen->id,
+            'opening_amount' => 150,
+            'expected_closing_amount' => 150,
+        ]);
+    }
+
+    public function test_adjustment_does_not_silently_update_next_closed_cash_session(): void
+    {
+        $closed = CashSession::create([
+            'opening_amount' => 100,
+            'expected_closing_amount' => 100,
+            'counted_closing_amount' => 100,
+            'difference' => 0,
+            'opened_at' => Carbon::parse('2026-05-13 08:00:00', config('app.timezone')),
+            'closed_at' => Carbon::parse('2026-05-13 20:00:00', config('app.timezone')),
+            'status' => 'cerrada',
+        ]);
+        $nextClosed = CashSession::create([
+            'opening_amount' => 100,
+            'expected_closing_amount' => 120,
+            'counted_closing_amount' => 120,
+            'difference' => 0,
+            'opened_at' => Carbon::parse('2026-05-14 08:00:00', config('app.timezone')),
+            'closed_at' => Carbon::parse('2026-05-14 20:00:00', config('app.timezone')),
+            'status' => 'cerrada',
+        ]);
+
+        $this->actingAs($this->admin(), 'sanctum')
+            ->patchJson("/api/cash-sessions/{$closed->id}/closing-adjustment", [
+                'counted_closing_amount' => 140,
+                'notes' => 'Ajuste controlado',
+                'reason' => 'Corrección de cierre anterior.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('next_session_updated', false)
+            ->assertJsonPath('warning', 'Existe una caja posterior ya cerrada. No se modificó la cadena automáticamente; revise el historial y registre los ajustes necesarios con evidencia.');
+
+        $this->assertDatabaseHas('cash_sessions', [
+            'id' => $nextClosed->id,
+            'opening_amount' => 100,
+            'expected_closing_amount' => 120,
+        ]);
+    }
+
     private function admin(): User
     {
         $user = User::factory()->create();

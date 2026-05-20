@@ -15,7 +15,7 @@ class ExpenseController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $query = Expense::with(['supplier', 'user:id,name'])
+        $query = Expense::with(['supplier', 'items.catalogItem', 'user:id,name'])
             ->orderByDesc('expense_date')
             ->orderByDesc('id');
 

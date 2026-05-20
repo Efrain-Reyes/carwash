@@ -504,7 +504,7 @@ class _CashSection extends StatelessWidget {
               ),
               if (caja.efectivoContado != null)
                 _CashRow(
-                  label: 'Efectivo contado',
+                  label: 'Efectivo total contado en caja',
                   value: Fmt.lempira(caja.efectivoContado!),
                 ),
               if (difference != null)

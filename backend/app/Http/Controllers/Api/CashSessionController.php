@@ -3,13 +3,16 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\AdjustCashSessionCloseRequest;
 use App\Http\Requests\Api\CloseCashSessionRequest;
 use App\Http\Requests\Api\StoreCashSessionRequest;
 use App\Models\CashSession;
+use App\Models\CashSessionAdjustment;
 use App\Services\AccountingReportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class CashSessionController extends Controller
 {
@@ -41,7 +44,9 @@ class CashSessionController extends Controller
             $query->where('opened_at', '<=', Carbon::parse($request->date_to, $tz)->endOfDay());
         }
 
-        return response()->json($query->paginate(20));
+        return response()->json(
+            $query->paginate(20)->through(fn (CashSession $session) => $this->serializeSession($session))
+        );
     }
 
     public function current(): JsonResponse
@@ -113,7 +118,7 @@ class CashSessionController extends Controller
         if ($lastSession->counted_closing_amount === null) {
             return response()->json([
                 'cash_session' => null,
-                'message' => 'La última caja cerrada no tiene efectivo contado.',
+                'message' => 'La última caja cerrada no tiene efectivo total contado en caja.',
                 'requires_first_cash_session' => false,
                 'pending_closure' => false,
                 'opened_automatically' => false,
@@ -172,7 +177,11 @@ class CashSessionController extends Controller
 
     public function show(CashSession $cashSession): JsonResponse
     {
-        $cashSession->load(['openedBy:id,name', 'closedBy:id,name']);
+        $cashSession->load([
+            'openedBy:id,name',
+            'closedBy:id,name',
+            'adjustments.user:id,name',
+        ]);
 
         return response()->json([
             'cash_session' => $this->serializeSession($cashSession),
@@ -228,9 +237,88 @@ class CashSessionController extends Controller
         ]);
     }
 
+    public function adjustClosing(AdjustCashSessionCloseRequest $request, CashSession $cashSession): JsonResponse
+    {
+        if ($cashSession->status !== 'cerrada') {
+            return response()->json([
+                'message' => 'Solo se pueden editar cierres de cajas cerradas.',
+            ], 422);
+        }
+
+        $warning = null;
+        $nextSessionUpdated = false;
+
+        DB::transaction(function () use ($request, $cashSession, &$warning, &$nextSessionUpdated) {
+            $cashSession->refresh();
+
+            $expectedClosing = $cashSession->expected_closing_amount !== null
+                ? round((float) $cashSession->expected_closing_amount, 2)
+                : $this->expectedClosingForSession($cashSession);
+            $countedClosing = round((float) $request->counted_closing_amount, 2);
+            $difference = round($countedClosing - $expectedClosing, 2);
+            $newNotes = $request->input('notes');
+
+            CashSessionAdjustment::create([
+                'cash_session_id' => $cashSession->id,
+                'user_id' => $request->user()?->id,
+                'old_counted_closing_amount' => $cashSession->counted_closing_amount,
+                'new_counted_closing_amount' => $countedClosing,
+                'old_difference' => $cashSession->difference,
+                'new_difference' => $difference,
+                'old_notes' => $cashSession->notes,
+                'new_notes' => $newNotes,
+                'reason' => $request->reason,
+            ]);
+
+            $cashSession->update([
+                'expected_closing_amount' => $expectedClosing,
+                'counted_closing_amount' => $countedClosing,
+                'difference' => $difference,
+                'notes' => $newNotes,
+            ]);
+
+            $nextSession = CashSession::query()
+                ->where('opened_at', '>', $cashSession->opened_at)
+                ->orderBy('opened_at')
+                ->orderBy('id')
+                ->first();
+
+            if (! $nextSession) {
+                return;
+            }
+
+            if ($nextSession->status === 'abierta') {
+                $nextExpected = $this->expectedClosingForSession($nextSession, $countedClosing);
+
+                $nextSession->update([
+                    'opening_amount' => $countedClosing,
+                    'expected_closing_amount' => $nextExpected,
+                ]);
+
+                $nextSessionUpdated = true;
+
+                return;
+            }
+
+            $warning = 'Existe una caja posterior ya cerrada. No se modificó la cadena automáticamente; revise el historial y registre los ajustes necesarios con evidencia.';
+        });
+
+        $cashSession->load([
+            'openedBy:id,name',
+            'closedBy:id,name',
+            'adjustments.user:id,name',
+        ]);
+
+        return response()->json([
+            'cash_session' => $this->serializeSession($cashSession),
+            'next_session_updated' => $nextSessionUpdated,
+            'warning' => $warning,
+        ]);
+    }
+
     private function serializeSession(CashSession $session): array
     {
-        return [
+        $data = [
             'id' => $session->id,
             'opening_amount' => (float) $session->opening_amount,
             'expected_closing_amount' => $session->expected_closing_amount !== null ? (float) $session->expected_closing_amount : null,
@@ -252,7 +340,20 @@ class CashSessionController extends Controller
                 'name' => $session->closedBy->name,
             ] : null,
             'notes' => $session->notes,
+            'needs_review' => $session->status === 'cerrada'
+                && $session->difference !== null
+                && (float) $session->difference < 0,
         ];
+
+        if ($session->relationLoaded('adjustments')) {
+            $data['adjustments'] = $session->adjustments
+                ->sortByDesc('created_at')
+                ->values()
+                ->map(fn (CashSessionAdjustment $adjustment) => $this->serializeAdjustment($adjustment))
+                ->toArray();
+        }
+
+        return $data;
     }
 
     private function serializeCurrentSession(CashSession $session, Carbon $expectedAt): array
@@ -277,5 +378,42 @@ class CashSessionController extends Controller
         }
 
         return $data;
+    }
+
+    private function expectedClosingForSession(CashSession $session, ?float $openingAmount = null): float
+    {
+        $tz = config('app.timezone');
+        $to = $session->closed_at ?? now($tz)->endOfDay();
+
+        $movement = $this->reportService->cashMovementBetween(
+            $session->opened_at->copy()->startOfDay(),
+            $to->copy()->endOfDay(),
+        );
+
+        return $this->reportService->calculateExpectedClosing(
+            $openingAmount ?? (float) $session->opening_amount,
+            (float) $movement['movimiento_neto_efectivo'],
+        );
+    }
+
+    private function serializeAdjustment(CashSessionAdjustment $adjustment): array
+    {
+        return [
+            'id' => $adjustment->id,
+            'cash_session_id' => $adjustment->cash_session_id,
+            'user_id' => $adjustment->user_id,
+            'user' => $adjustment->user ? [
+                'id' => $adjustment->user->id,
+                'name' => $adjustment->user->name,
+            ] : null,
+            'old_counted_closing_amount' => $adjustment->old_counted_closing_amount !== null ? (float) $adjustment->old_counted_closing_amount : null,
+            'new_counted_closing_amount' => (float) $adjustment->new_counted_closing_amount,
+            'old_difference' => $adjustment->old_difference !== null ? (float) $adjustment->old_difference : null,
+            'new_difference' => (float) $adjustment->new_difference,
+            'old_notes' => $adjustment->old_notes,
+            'new_notes' => $adjustment->new_notes,
+            'reason' => $adjustment->reason,
+            'created_at' => $adjustment->created_at?->toDateTimeString(),
+        ];
     }
 }

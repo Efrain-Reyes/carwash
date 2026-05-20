@@ -4,7 +4,7 @@ namespace App\Http\Requests\Api;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class CloseCashSessionRequest extends FormRequest
+class AdjustCashSessionCloseRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -15,8 +15,8 @@ class CloseCashSessionRequest extends FormRequest
     {
         return [
             'counted_closing_amount' => 'required|numeric|min:0',
-            'closed_at' => 'nullable|date',
             'notes' => 'nullable|string|max:1000',
+            'reason' => 'required|string|max:1000',
         ];
     }
 
@@ -25,6 +25,7 @@ class CloseCashSessionRequest extends FormRequest
         return [
             'counted_closing_amount.required' => 'El efectivo total contado en caja es obligatorio.',
             'counted_closing_amount.min' => 'El efectivo total contado en caja no puede ser negativo.',
+            'reason.required' => 'El motivo del ajuste es obligatorio.',
         ];
     }
 }

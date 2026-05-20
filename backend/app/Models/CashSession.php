@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class CashSession extends Model
 {
@@ -40,5 +41,10 @@ class CashSession extends Model
     public function closedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'closed_by');
+    }
+
+    public function adjustments(): HasMany
+    {
+        return $this->hasMany(CashSessionAdjustment::class);
     }
 }

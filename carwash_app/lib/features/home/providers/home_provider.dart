@@ -2,6 +2,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../../core/utils/formatters.dart';
+import '../../expenses/models/expense_model.dart';
+import '../../expenses/services/expense_service.dart';
 import '../../reports/models/accounting_report.dart';
 import '../../reports/services/reports_service.dart';
 import '../../washes/models/wash_item.dart';
@@ -11,6 +13,7 @@ class HomeProvider extends ChangeNotifier {
   AccountingReport? _report;
   CurrentCashSessionResponse? _cashState;
   List<WashItem> _recentWashes = [];
+  List<Expense> _todayExpenses = [];
   bool _loading = false;
   bool _cashActionLoading = false;
   String? _error;
@@ -19,6 +22,7 @@ class HomeProvider extends ChangeNotifier {
   AccountingReport? get report => _report;
   CurrentCashSessionResponse? get cashState => _cashState;
   List<WashItem> get recentWashes => _recentWashes;
+  List<Expense> get todayExpenses => _todayExpenses;
   bool get loading => _loading;
   bool get cashActionLoading => _cashActionLoading;
   String? get error => _error;
@@ -93,6 +97,18 @@ class HomeProvider extends ChangeNotifier {
       debugPrint('[HomeProvider] recent washes: ${_recentWashes.length}');
     } catch (_) {
       debugPrint('[HomeProvider] error loading washes (silent)');
+    }
+
+    try {
+      final expensesResult = await ExpenseService.getExpenses(
+        dateFrom: today,
+        dateTo: today,
+        status: 'activo',
+      );
+      _todayExpenses = (expensesResult['expenses'] as List<Expense>?) ?? [];
+      debugPrint('[HomeProvider] today expenses: ${_todayExpenses.length}');
+    } catch (_) {
+      debugPrint('[HomeProvider] error loading expenses (silent)');
     }
 
     if (!silent) {
