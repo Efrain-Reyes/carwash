@@ -85,6 +85,25 @@ class _HomeTabBodyState extends State<_HomeTabBody> {
     }
   }
 
+  Future<void> _refreshHome() async {
+    final homeProvider = context.read<HomeProvider>();
+    final wasShowingError = homeProvider.error != null;
+
+    if (wasShowingError) {
+      await homeProvider.loadToday();
+    } else {
+      await homeProvider.reload();
+    }
+
+    if (!mounted) return;
+    final error = homeProvider.error ?? homeProvider.cashError;
+    if (error != null && error.isNotEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error)));
+    }
+  }
+
   double? _parseAmount(String value) {
     final amount = double.tryParse(value.trim().replaceAll(',', '.'));
     if (amount == null || amount < 0) return null;
@@ -369,7 +388,24 @@ class _HomeTabBodyState extends State<_HomeTabBody> {
       );
     }
     if (home.error != null) {
-      return _ErrorView(message: home.error!, onRetry: home.loadToday);
+      return RefreshIndicator(
+        color: AppColors.accent,
+        onRefresh: _refreshHome,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: _ErrorView(
+                  message: home.error!,
+                  onRetry: home.loadToday,
+                ),
+              ),
+            );
+          },
+        ),
+      );
     }
     return _Content(
       report: home.report,
@@ -378,6 +414,7 @@ class _HomeTabBodyState extends State<_HomeTabBody> {
       cashActionLoading: home.cashActionLoading,
       isAdmin: auth.user?.isAdmin ?? false,
       recentWashes: home.recentWashes,
+      onRefresh: _refreshHome,
       onTabChange: widget.onTabChange,
       onRegisterWash: _goToRegisterWash,
       onCreateFirstCash: _showCreateFirstCashDialog,
@@ -482,6 +519,7 @@ class _Content extends StatelessWidget {
     required this.cashActionLoading,
     required this.isAdmin,
     required this.recentWashes,
+    required this.onRefresh,
     required this.onTabChange,
     required this.onRegisterWash,
     required this.onCreateFirstCash,
@@ -494,6 +532,7 @@ class _Content extends StatelessWidget {
   final bool cashActionLoading;
   final bool isAdmin;
   final List<WashItem> recentWashes;
+  final RefreshCallback onRefresh;
   final ValueChanged<NavTab> onTabChange;
   final VoidCallback onRegisterWash;
   final VoidCallback onCreateFirstCash;
@@ -505,130 +544,135 @@ class _Content extends StatelessWidget {
     final washCount = report?.lavados.cantidad ?? 0;
     final movimiento = r?.movimientoNetoEfectivo ?? 0;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Summary cards 2×2
-          Row(
-            children: [
-              Expanded(
-                child: SummaryCard(
-                  compact: true,
-                  label: 'Ingresos',
-                  value: Fmt.lempira(r?.ingresosLavados ?? 0),
-                  icon: Icons.local_car_wash_rounded,
-                  iconColor: AppColors.accent,
+    return RefreshIndicator(
+      color: AppColors.accent,
+      onRefresh: onRefresh,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Summary cards 2×2
+            Row(
+              children: [
+                Expanded(
+                  child: SummaryCard(
+                    compact: true,
+                    label: 'Ingresos',
+                    value: Fmt.lempira(r?.ingresosLavados ?? 0),
+                    icon: Icons.local_car_wash_rounded,
+                    iconColor: AppColors.accent,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: SummaryCard(
-                  compact: true,
-                  label: 'Lavados',
-                  value: '$washCount',
-                  icon: Icons.car_repair_rounded,
-                  iconColor: AppColors.primary,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: SummaryCard(
+                    compact: true,
+                    label: 'Lavados',
+                    value: '$washCount',
+                    icon: Icons.car_repair_rounded,
+                    iconColor: AppColors.primary,
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: SummaryCard(
-                  compact: true,
-                  label: 'Gastos',
-                  value: Fmt.lempira(r?.totalGastos ?? 0),
-                  icon: Icons.receipt_long_rounded,
-                  iconColor: AppColors.warningDot,
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: SummaryCard(
+                    compact: true,
+                    label: 'Gastos',
+                    value: Fmt.lempira(r?.totalGastos ?? 0),
+                    icon: Icons.receipt_long_rounded,
+                    iconColor: AppColors.warningDot,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: SummaryCard(
-                  compact: true,
-                  label: 'Mov. neto efectivo',
-                  value: Fmt.lempira(movimiento),
-                  icon: movimiento >= 0
-                      ? Icons.trending_up_rounded
-                      : Icons.trending_down_rounded,
-                  iconColor: movimiento >= 0
-                      ? AppColors.successFg
-                      : AppColors.errorFg,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: SummaryCard(
+                    compact: true,
+                    label: 'Mov. neto efectivo',
+                    value: Fmt.lempira(movimiento),
+                    icon: movimiento >= 0
+                        ? Icons.trending_up_rounded
+                        : Icons.trending_down_rounded,
+                    iconColor: movimiento >= 0
+                        ? AppColors.successFg
+                        : AppColors.errorFg,
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
 
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-          _CashDayCard(
-            state: cashState,
-            error: cashError,
-            isAdmin: isAdmin,
-            actionLoading: cashActionLoading,
-            onCreateFirstCash: onCreateFirstCash,
-            onCloseCash: onCloseCash,
-          ),
+            _CashDayCard(
+              state: cashState,
+              error: cashError,
+              isAdmin: isAdmin,
+              actionLoading: cashActionLoading,
+              onCreateFirstCash: onCreateFirstCash,
+              onCloseCash: onCloseCash,
+            ),
 
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-          // Register wash CTA
-          _RegisterWashBtn(onTap: onRegisterWash),
+            // Register wash CTA
+            _RegisterWashBtn(onTap: onRegisterWash),
 
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-          // Quick access 2×2
-          SectionHeader(title: 'Accesos rápidos'),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: _QuickCard(
-                  icon: Icons.local_car_wash_rounded,
-                  label: 'Lavados',
-                  onTap: () => onTabChange(NavTab.lavados),
+            // Quick access 2×2
+            SectionHeader(title: 'Accesos rápidos'),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: _QuickCard(
+                    icon: Icons.local_car_wash_rounded,
+                    label: 'Lavados',
+                    onTap: () => onTabChange(NavTab.lavados),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _QuickCard(
-                  icon: Icons.receipt_long_rounded,
-                  label: 'Gastos',
-                  onTap: () => onTabChange(NavTab.gastos),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _QuickCard(
+                    icon: Icons.receipt_long_rounded,
+                    label: 'Gastos',
+                    onTap: () => onTabChange(NavTab.gastos),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _QuickCard(
-                  icon: Icons.group_rounded,
-                  label: 'Nómina',
-                  onTap: () => onTabChange(NavTab.nomina),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _QuickCard(
+                    icon: Icons.group_rounded,
+                    label: 'Nómina',
+                    onTap: () => onTabChange(NavTab.nomina),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _QuickCard(
-                  icon: Icons.bar_chart_rounded,
-                  label: 'Reportes',
-                  onTap: () => onTabChange(NavTab.reportes),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _QuickCard(
+                    icon: Icons.bar_chart_rounded,
+                    label: 'Reportes',
+                    onTap: () => onTabChange(NavTab.reportes),
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
 
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-          // Recent washes
-          SectionHeader(title: 'Últimos lavados'),
-          const SizedBox(height: 10),
-          _RecentWashes(washes: recentWashes),
+            // Recent washes
+            SectionHeader(title: 'Últimos lavados'),
+            const SizedBox(height: 10),
+            _RecentWashes(washes: recentWashes),
 
-          const SizedBox(height: 16),
-        ],
+            const SizedBox(height: 16),
+          ],
+        ),
       ),
     );
   }

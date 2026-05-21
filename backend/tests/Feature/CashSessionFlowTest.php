@@ -80,7 +80,7 @@ class CashSessionFlowTest extends TestCase
 
     public function test_current_opens_today_from_last_counted_closing_amount(): void
     {
-        CashSession::create([
+        $session = CashSession::create([
             'opening_amount' => 100,
             'expected_closing_amount' => 125,
             'counted_closing_amount' => 110,
@@ -91,7 +91,7 @@ class CashSessionFlowTest extends TestCase
             'notes' => 'Cierre anterior',
         ]);
 
-        $response = $this->actingAs($this->operator(), 'sanctum')
+        $response = $this->actingAs($this->admin(), 'sanctum')
             ->getJson('/api/cash-sessions/current');
 
         $response
@@ -130,7 +130,7 @@ class CashSessionFlowTest extends TestCase
         $this->assertDatabaseCount('cash_sessions', 1);
     }
 
-    public function test_operator_can_view_current_cash_but_cannot_open_or_close(): void
+    public function test_operator_cannot_view_or_manage_cash(): void
     {
         $operator = $this->operator();
         $session = CashSession::create([
@@ -141,8 +141,7 @@ class CashSessionFlowTest extends TestCase
 
         $this->actingAs($operator, 'sanctum')
             ->getJson('/api/cash-sessions/current')
-            ->assertOk()
-            ->assertJsonPath('cash_session.id', $session->id);
+            ->assertForbidden();
 
         $this->actingAs($operator, 'sanctum')
             ->postJson('/api/cash-sessions', ['opening_amount' => 100])

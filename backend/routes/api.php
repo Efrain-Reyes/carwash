@@ -28,17 +28,17 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // Lavados
-    Route::get('washes', [WashController::class, 'index'])->middleware('can:wash.view');
-    Route::post('washes', [WashController::class, 'store'])->middleware('can:wash.create');
-    Route::get('washes/{wash}', [WashController::class, 'show'])->middleware('can:wash.view');
+    Route::get('washes', [WashController::class, 'index'])->middleware('can:washes.view_own');
+    Route::post('washes', [WashController::class, 'store'])->middleware('can:washes.create');
+    Route::get('washes/{wash}', [WashController::class, 'show'])->middleware('can:washes.view_own');
     Route::patch('washes/{wash}/cancel', [WashController::class, 'cancel'])->middleware('can:wash.cancel');
 
     // Catálogo — tipos de vehículo
-    Route::get('vehicle-types', [VehicleTypeController::class, 'index'])->middleware('can:wash.view');
+    Route::get('vehicle-types', [VehicleTypeController::class, 'index'])->middleware('can:vehicle_types.view');
     Route::patch('vehicle-types/{vehicleType}/toggle', [VehicleTypeController::class, 'toggle'])->middleware('can:catalog.manage');
 
     // Catálogo — servicios de lavado
-    Route::get('wash-services', [WashServiceController::class, 'index'])->middleware('can:wash.view');
+    Route::get('wash-services', [WashServiceController::class, 'index'])->middleware('can:wash_services.view');
     Route::patch('wash-services/{washService}', [WashServiceController::class, 'update'])->middleware('can:catalog.manage');
     Route::patch('wash-services/{washService}/toggle', [WashServiceController::class, 'toggle'])->middleware('can:catalog.manage');
 

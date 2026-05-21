@@ -18,6 +18,10 @@ class RolesAndPermissionsSeeder extends Seeder
             'wash.view',
             'wash.create',
             'wash.cancel',
+            'washes.create',
+            'washes.view_own',
+            'vehicle_types.view',
+            'wash_services.view',
 
             // Gastos
             'expense.view',
@@ -64,10 +68,10 @@ class RolesAndPermissionsSeeder extends Seeder
 
         $operator = Role::firstOrCreate(['name' => 'operador']);
         $operator->syncPermissions([
-            'wash.view',
-            'wash.create',
-            'advance.view',
-            'cash.view',
+            'washes.create',
+            'washes.view_own',
+            'vehicle_types.view',
+            'wash_services.view',
         ]);
     }
 }

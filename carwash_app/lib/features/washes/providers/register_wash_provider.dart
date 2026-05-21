@@ -108,7 +108,8 @@ class RegisterWashProvider extends ChangeNotifier {
       notifyListeners();
       return true;
     } catch (_) {
-      _saveError = 'No se pudo registrar el lavado. Intenta de nuevo.';
+      _saveError =
+          'No se puede registrar el lavado en este momento. Contacte al administrador.';
       _saving = false;
       notifyListeners();
       return false;

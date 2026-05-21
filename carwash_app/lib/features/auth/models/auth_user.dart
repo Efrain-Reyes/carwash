@@ -24,5 +24,6 @@ class AuthUser {
   }
 
   bool get isAdmin => roles.contains('administrador');
+  bool get isOperator => roles.contains('operador') && !isAdmin;
   bool hasPermission(String permission) => permissions.contains(permission);
 }

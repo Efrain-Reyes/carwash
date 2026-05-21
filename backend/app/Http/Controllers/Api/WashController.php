@@ -15,9 +15,14 @@ class WashController extends Controller
     public function index(Request $request): JsonResponse
     {
         $tz = config('app.timezone');
+        $user = $request->user();
 
         $query = Wash::with(['vehicleType', 'washService', 'user:id,name'])
             ->orderByDesc('registered_at');
+
+        if (! $user->can('wash.view')) {
+            $query->where('user_id', $user->id);
+        }
 
         if ($request->filled('date_from')) {
             $query->where('registered_at', '>=',
@@ -39,7 +44,7 @@ class WashController extends Controller
             $query->where('wash_service_id', $request->wash_service_id);
         }
 
-        if ($request->filled('user_id')) {
+        if ($user->can('wash.view') && $request->filled('user_id')) {
             $query->where('user_id', $request->user_id);
         }
 
@@ -91,6 +96,10 @@ class WashController extends Controller
 
     public function show(Wash $wash): JsonResponse
     {
+        if (! request()->user()->can('wash.view') && $wash->user_id !== request()->user()->id) {
+            abort(403);
+        }
+
         $wash->load(['vehicleType', 'washService', 'user:id,name']);
 
         return response()->json($wash);
