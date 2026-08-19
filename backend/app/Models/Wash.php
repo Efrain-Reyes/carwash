@@ -10,6 +10,7 @@ class Wash extends Model
     protected $fillable = [
         'user_id',
         'cash_session_id',
+        'excluded_from_cash_session',
         'vehicle_type_id',
         'wash_service_id',
         'custom_description',
@@ -23,6 +24,7 @@ class Wash extends Model
     {
         return [
             'price'         => 'decimal:2',
+            'excluded_from_cash_session' => 'boolean',
             'registered_at' => 'datetime',
         ];
     }

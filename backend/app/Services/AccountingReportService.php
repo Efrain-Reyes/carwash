@@ -245,6 +245,13 @@ class AccountingReportService
      * (cash_session_id nulo — datos legacy o de carrera) capturados hasta
      * $this->to, para que nada se pierda entre sesiones. Sin sesión seteada
      * (reportes por rango de fechas), usa el rango de fechas de siempre.
+     *
+     * Los registros con excluded_from_cash_session = true (historial de antes del
+     * módulo de caja, clasificado manualmente vía los comandos de backfill) NUNCA
+     * se cuentan en ningún CIERRE DE CAJA (modo sesión) — pero sí siguen
+     * apareciendo en los reportes contables por rango de fecha, porque siguen
+     * siendo ingresos/gastos reales que ocurrieron, solo que nunca pasaron por
+     * una caja física.
      */
     private function sessionScopedQuery(Builder $query, string $dateColumn): Builder
     {
@@ -252,6 +259,7 @@ class AccountingReportService
             $sessionId = $this->session->id;
             $to = $this->to;
 
+            $query->where('excluded_from_cash_session', false);
             $query->where(function ($q) use ($sessionId, $to) {
                 $q->where('cash_session_id', $sessionId)
                     ->orWhere(function ($q2) use ($to) {

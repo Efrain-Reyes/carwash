@@ -241,28 +241,35 @@ class CashSessionController extends Controller
 
             // Reclama permanentemente cualquier movimiento huérfano (cash_session_id
             // nulo, dato legacy o de carrera) que ya se contabilizó en este cierre,
-            // para que no vuelva a contarse ni quede sin dueño en el futuro.
+            // para que no vuelva a contarse ni quede sin dueño en el futuro. Los
+            // marcados excluded_from_cash_session=true (historial de antes del
+            // módulo de caja) se excluyen a propósito — nunca deben reclamarse.
             Wash::whereNull('cash_session_id')
+                ->where('excluded_from_cash_session', false)
                 ->where('status', 'completado')
                 ->where('created_at', '<=', $closedAt)
                 ->update(['cash_session_id' => $cashSession->id]);
 
             Expense::whereNull('cash_session_id')
+                ->where('excluded_from_cash_session', false)
                 ->where('status', 'activo')
                 ->where('created_at', '<=', $closedAt)
                 ->update(['cash_session_id' => $cashSession->id]);
 
             PayrollPayment::whereNull('cash_session_id')
+                ->where('excluded_from_cash_session', false)
                 ->where('status', 'pagado')
                 ->where('created_at', '<=', $closedAt)
                 ->update(['cash_session_id' => $cashSession->id]);
 
             EmployeeAdvance::whereNull('cash_session_id')
+                ->where('excluded_from_cash_session', false)
                 ->whereNotIn('status', ['anulado'])
                 ->where('created_at', '<=', $closedAt)
                 ->update(['cash_session_id' => $cashSession->id]);
 
             EmployeeAdvancePayment::whereNull('cash_session_id')
+                ->where('excluded_from_cash_session', false)
                 ->where('payment_type', 'abono_efectivo')
                 ->where('created_at', '<=', $closedAt)
                 ->update(['cash_session_id' => $cashSession->id]);

@@ -13,7 +13,9 @@ use Illuminate\Support\Facades\DB;
 
 class BackfillMovementCashSessions extends Command
 {
-    protected $signature = 'movements:backfill-cash-sessions {--apply : Ejecuta el UPDATE real. Sin esta opción solo se muestra un resumen (dry-run).}';
+    protected $signature = 'movements:backfill-cash-sessions
+        {--apply : Ejecuta el UPDATE real. Sin esta opción solo se muestra un resumen (dry-run).}
+        {--exclude-orphans : Junto con --apply, marca excluded_from_cash_session=true en los registros que sigan huérfanos después de asignar, para que NUNCA se cuenten en ningún cierre futuro (útil para historial de antes de usar caja).}';
 
     protected $description = 'Asigna cash_session_id a gastos, pagos de nómina, adelantos y abonos históricos (creados antes del fix), según la sesión de caja que estaba abierta en su fecha, replicando el criterio con el que ya se calcularon los cierres.';
 
@@ -55,6 +57,13 @@ class BackfillMovementCashSessions extends Command
     public function handle(): int
     {
         $apply = (bool) $this->option('apply');
+        $excludeOrphans = (bool) $this->option('exclude-orphans');
+
+        if ($excludeOrphans && ! $apply) {
+            $this->error('--exclude-orphans solo tiene efecto junto con --apply.');
+
+            return self::FAILURE;
+        }
 
         $this->info($apply ? 'Modo APPLY: se aplicarán los cambios.' : 'Modo DRY-RUN: no se modifica nada, solo se muestra el resumen.');
 
@@ -78,6 +87,7 @@ class BackfillMovementCashSessions extends Command
                 $to = $session->closed_at ?? now();
 
                 $query = $modelClass::whereNull('cash_session_id')
+                    ->where('excluded_from_cash_session', false)
                     ->whereBetween($entity['dateColumn'], [$session->opened_at, $to]);
                 ($entity['extra'])($query);
 
@@ -107,14 +117,21 @@ class BackfillMovementCashSessions extends Command
             $accion = $apply ? 'asignados' : 'que se asignarían (dry-run)';
             $this->info("Total {$accion}: {$totalAsignados}");
 
-            $huerfanosQuery = $modelClass::whereNull('cash_session_id');
+            $huerfanosQuery = $modelClass::whereNull('cash_session_id')->where('excluded_from_cash_session', false);
             ($entity['extra'])($huerfanosQuery);
-            $huerfanos = $huerfanosQuery->count();
+            $huerfanosIds = (clone $huerfanosQuery)->pluck('id');
 
-            if ($huerfanos > 0) {
-                $this->warn("Quedan {$huerfanos} huérfanos — serán reclamados automáticamente por el próximo cierre de caja.");
-            } else {
+            if ($huerfanosIds->isEmpty()) {
                 $this->info('No quedan huérfanos.');
+
+                continue;
+            }
+
+            if ($excludeOrphans) {
+                $modelClass::whereIn('id', $huerfanosIds)->update(['excluded_from_cash_session' => true]);
+                $this->warn("Se marcaron {$huerfanosIds->count()} huérfanos como excluded_from_cash_session=true. NUNCA se contarán en ningún cierre futuro.");
+            } else {
+                $this->warn("Quedan {$huerfanosIds->count()} huérfanos — sin --exclude-orphans, serán reclamados automáticamente por el próximo cierre de caja.");
             }
         }
 

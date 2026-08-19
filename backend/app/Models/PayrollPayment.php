@@ -10,6 +10,7 @@ class PayrollPayment extends Model
 {
     protected $fillable = [
         'cash_session_id',
+        'excluded_from_cash_session',
         'payroll_period_id',
         'employee_id',
         'salary_history_id',
@@ -32,6 +33,7 @@ class PayrollPayment extends Model
     {
         return [
             'base_salary'       => 'decimal:2',
+            'excluded_from_cash_session' => 'boolean',
             'daily_rate'        => 'decimal:2',
             'days_worked'       => 'decimal:2',
             'gross_amount'      => 'decimal:2',

@@ -381,6 +381,45 @@ class CashSessionFlowTest extends TestCase
     }
 
     /**
+     * Un lavado marcado excluded_from_cash_session=true (historial de antes de
+     * usar el módulo de caja, clasificado vía washes:backfill-cash-sessions
+     * --exclude-orphans) NUNCA debe contarse en ningún cierre, ni siquiera como
+     * huérfano reclamable.
+     */
+    public function test_wash_excluded_from_cash_session_is_never_counted_in_any_closing(): void
+    {
+        [$vehicleType, $service] = $this->vehicleAndService();
+
+        Wash::create([
+            'user_id' => $this->operator()->id,
+            'cash_session_id' => null,
+            'excluded_from_cash_session' => true,
+            'vehicle_type_id' => $vehicleType->id,
+            'wash_service_id' => $service->id,
+            'price' => 999,
+            'status' => 'completado',
+            'registered_at' => Carbon::parse('2026-04-01 10:00:00', config('app.timezone')),
+        ]);
+
+        Carbon::setTestNow(Carbon::parse('2026-05-15 09:00:00', config('app.timezone')));
+        $session = CashSession::create([
+            'opening_amount' => 100,
+            'opened_at' => Carbon::parse('2026-05-15 08:00:00', config('app.timezone')),
+            'status' => 'abierta',
+        ]);
+
+        $this->actingAs($this->admin(), 'sanctum')
+            ->patchJson("/api/cash-sessions/{$session->id}/close", ['counted_closing_amount' => 100])
+            ->assertOk()
+            ->assertJsonPath('movimiento.ingresos_lavados', 0);
+
+        $this->assertDatabaseHas('washes', [
+            'excluded_from_cash_session' => true,
+            'cash_session_id' => null,
+        ]);
+    }
+
+    /**
      * Mismo patrón del bug de lavados, aplicado a gastos: un gasto registrado con
      * fecha atrasada (de una sesión ya cerrada) debe sumarse al cierre de la
      * sesión que está abierta cuando se captura en el sistema, no perderse.

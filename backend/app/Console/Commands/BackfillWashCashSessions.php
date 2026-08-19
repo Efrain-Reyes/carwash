@@ -9,13 +9,22 @@ use Illuminate\Support\Facades\DB;
 
 class BackfillWashCashSessions extends Command
 {
-    protected $signature = 'washes:backfill-cash-sessions {--apply : Ejecuta el UPDATE real. Sin esta opción solo se muestra un resumen (dry-run).}';
+    protected $signature = 'washes:backfill-cash-sessions
+        {--apply : Ejecuta el UPDATE real. Sin esta opción solo se muestra un resumen (dry-run).}
+        {--exclude-orphans : Junto con --apply, marca excluded_from_cash_session=true en los lavados que sigan huérfanos después de asignar, para que NUNCA se cuenten en ningún cierre futuro (útil para historial de antes de usar caja).}';
 
     protected $description = 'Asigna cash_session_id a lavados históricos (creados antes del fix) según la sesión de caja que estaba abierta en registered_at, replicando el criterio con el que ya se calcularon los cierres.';
 
     public function handle(): int
     {
         $apply = (bool) $this->option('apply');
+        $excludeOrphans = (bool) $this->option('exclude-orphans');
+
+        if ($excludeOrphans && ! $apply) {
+            $this->error('--exclude-orphans solo tiene efecto junto con --apply.');
+
+            return self::FAILURE;
+        }
 
         $this->info($apply ? 'Modo APPLY: se aplicarán los cambios.' : 'Modo DRY-RUN: no se modifica nada, solo se muestra el resumen.');
 
@@ -33,6 +42,7 @@ class BackfillWashCashSessions extends Command
             $to = $session->closed_at ?? now();
 
             $query = Wash::whereNull('cash_session_id')
+                ->where('excluded_from_cash_session', false)
                 ->where('status', 'completado')
                 ->whereBetween('registered_at', [$session->opened_at, $to]);
 
@@ -65,6 +75,7 @@ class BackfillWashCashSessions extends Command
         $this->info("Total de lavados {$this->accionLabel($apply)}: {$totalAsignados}");
 
         $huerfanos = Wash::whereNull('cash_session_id')
+            ->where('excluded_from_cash_session', false)
             ->where('status', 'completado')
             ->orderBy('registered_at')
             ->get(['id', 'registered_at', 'price', 'user_id', 'notes']);
@@ -76,7 +87,19 @@ class BackfillWashCashSessions extends Command
         }
 
         $this->newLine();
-        $this->warn("Quedan {$huerfanos->count()} lavados huérfanos (no calzan en ninguna sesión por fecha). Serán reclamados automáticamente por el próximo cierre de caja que se ejecute:");
+
+        if ($excludeOrphans) {
+            $ids = $huerfanos->pluck('id');
+            $total = (float) $huerfanos->sum('price');
+
+            Wash::whereIn('id', $ids)->update(['excluded_from_cash_session' => true]);
+
+            $this->warn("Se marcaron {$huerfanos->count()} lavados huérfanos (L " . number_format($total, 2) . ') como excluded_from_cash_session=true. NUNCA se contarán en ningún cierre de caja futuro.');
+
+            return self::SUCCESS;
+        }
+
+        $this->warn("Quedan {$huerfanos->count()} lavados huérfanos (no calzan en ninguna sesión por fecha). Sin --exclude-orphans, serán reclamados automáticamente por el próximo cierre de caja que se ejecute:");
 
         $this->table(
             ['ID', 'registered_at', 'price', 'user_id', 'notes'],

@@ -10,6 +10,7 @@ class EmployeeAdvance extends Model
 {
     protected $fillable = [
         'cash_session_id',
+        'excluded_from_cash_session',
         'employee_id',
         'user_id',
         'amount',
@@ -23,6 +24,7 @@ class EmployeeAdvance extends Model
     {
         return [
             'amount'       => 'decimal:2',
+            'excluded_from_cash_session' => 'boolean',
             'balance'      => 'decimal:2',
             'advance_date' => 'date',
         ];

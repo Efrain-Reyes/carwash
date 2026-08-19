@@ -11,6 +11,7 @@ class Expense extends Model
     protected $fillable = [
         'user_id',
         'cash_session_id',
+        'excluded_from_cash_session',
         'supplier_id',
         'invoice_number',
         'is_internal_invoice',
@@ -27,6 +28,7 @@ class Expense extends Model
     {
         return [
             'is_internal_invoice' => 'boolean',
+            'excluded_from_cash_session' => 'boolean',
             'subtotal'            => 'decimal:2',
             'tax_amount'          => 'decimal:2',
             'total'               => 'decimal:2',
