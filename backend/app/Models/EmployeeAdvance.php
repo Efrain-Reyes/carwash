@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class EmployeeAdvance extends Model
 {
     protected $fillable = [
+        'cash_session_id',
         'employee_id',
         'user_id',
         'amount',
@@ -40,5 +41,10 @@ class EmployeeAdvance extends Model
     public function payments(): HasMany
     {
         return $this->hasMany(EmployeeAdvancePayment::class, 'advance_id');
+    }
+
+    public function cashSession(): BelongsTo
+    {
+        return $this->belongsTo(CashSession::class);
     }
 }

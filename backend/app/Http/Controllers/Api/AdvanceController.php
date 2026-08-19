@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\StoreAdvancePaymentRequest;
 use App\Http\Requests\Api\StoreAdvanceRequest;
+use App\Http\Requests\Api\UpdateAdvanceRequest;
 use App\Models\Employee;
 use App\Models\EmployeeAdvance;
 use App\Services\AdvanceService;
@@ -69,6 +70,17 @@ class AdvanceController extends Controller
         ]);
 
         return response()->json($advance);
+    }
+
+    public function update(UpdateAdvanceRequest $request, EmployeeAdvance $advance): JsonResponse
+    {
+        try {
+            $this->advanceService->update($advance, $request->validated());
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json($advance->fresh());
     }
 
     public function storePayment(StoreAdvancePaymentRequest $request, EmployeeAdvance $advance): JsonResponse

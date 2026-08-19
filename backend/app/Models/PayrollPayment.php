@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class PayrollPayment extends Model
 {
     protected $fillable = [
+        'cash_session_id',
         'payroll_period_id',
         'employee_id',
         'salary_history_id',
@@ -65,5 +66,10 @@ class PayrollPayment extends Model
     public function advancePayments(): HasMany
     {
         return $this->hasMany(EmployeeAdvancePayment::class, 'payroll_payment_id');
+    }
+
+    public function cashSession(): BelongsTo
+    {
+        return $this->belongsTo(CashSession::class);
     }
 }

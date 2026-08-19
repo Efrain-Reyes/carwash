@@ -10,6 +10,7 @@ class Expense extends Model
 {
     protected $fillable = [
         'user_id',
+        'cash_session_id',
         'supplier_id',
         'invoice_number',
         'is_internal_invoice',
@@ -46,5 +47,10 @@ class Expense extends Model
     public function items(): HasMany
     {
         return $this->hasMany(ExpenseItem::class);
+    }
+
+    public function cashSession(): BelongsTo
+    {
+        return $this->belongsTo(CashSession::class);
     }
 }

@@ -8,6 +8,11 @@ use App\Http\Requests\Api\CloseCashSessionRequest;
 use App\Http\Requests\Api\StoreCashSessionRequest;
 use App\Models\CashSession;
 use App\Models\CashSessionAdjustment;
+use App\Models\EmployeeAdvance;
+use App\Models\EmployeeAdvancePayment;
+use App\Models\Expense;
+use App\Models\PayrollPayment;
+use App\Models\Wash;
 use App\Services\AccountingReportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -70,6 +75,7 @@ class CashSessionController extends Controller
                 'requires_first_cash_session' => false,
                 'pending_closure' => $pendingClosure,
                 'opened_automatically' => false,
+                'pending_summary' => $this->pendingSummary($openSession, $todayStart, $todayEnd),
             ]);
         }
 
@@ -207,29 +213,62 @@ class CashSessionController extends Controller
             ], 422);
         }
 
-        $movement = $this->reportService->cashMovementBetween(
-            $cashSession->opened_at->copy()->startOfDay(),
-            $closedAt->copy()->endOfDay(),
-        );
+        $movement = null;
 
-        $expectedClosing = $this->reportService->calculateExpectedClosing(
-            (float) $cashSession->opening_amount,
-            (float) $movement['movimiento_neto_efectivo'],
-        );
-        $countedClosing = round((float) $request->counted_closing_amount, 2);
-        $difference = round($countedClosing - $expectedClosing, 2);
+        DB::transaction(function () use ($request, $cashSession, $closedAt, &$movement) {
+            // Lock: serializa contra WashController::store() para que ningún lavado
+            // se registre a mitad del cierre sin quedar contabilizado ni reclamado.
+            $cashSession = CashSession::where('id', $cashSession->id)->lockForUpdate()->first();
 
-        $cashSession->update([
-            'expected_closing_amount' => $expectedClosing,
-            'counted_closing_amount' => $countedClosing,
-            'difference' => $difference,
-            'closed_at' => $closedAt,
-            'status' => 'cerrada',
-            'closed_by' => $request->user()?->id,
-            'notes' => $request->notes ?? $cashSession->notes,
-        ]);
+            $movement = $this->reportService->cashMovementForSession($cashSession, $closedAt);
 
-        $cashSession->load(['openedBy:id,name', 'closedBy:id,name']);
+            $expectedClosing = $this->reportService->calculateExpectedClosing(
+                (float) $cashSession->opening_amount,
+                (float) $movement['movimiento_neto_efectivo'],
+            );
+            $countedClosing = round((float) $request->counted_closing_amount, 2);
+            $difference = round($countedClosing - $expectedClosing, 2);
+
+            $cashSession->update([
+                'expected_closing_amount' => $expectedClosing,
+                'counted_closing_amount' => $countedClosing,
+                'difference' => $difference,
+                'closed_at' => $closedAt,
+                'status' => 'cerrada',
+                'closed_by' => $request->user()?->id,
+                'notes' => $request->notes ?? $cashSession->notes,
+            ]);
+
+            // Reclama permanentemente cualquier movimiento huérfano (cash_session_id
+            // nulo, dato legacy o de carrera) que ya se contabilizó en este cierre,
+            // para que no vuelva a contarse ni quede sin dueño en el futuro.
+            Wash::whereNull('cash_session_id')
+                ->where('status', 'completado')
+                ->where('created_at', '<=', $closedAt)
+                ->update(['cash_session_id' => $cashSession->id]);
+
+            Expense::whereNull('cash_session_id')
+                ->where('status', 'activo')
+                ->where('created_at', '<=', $closedAt)
+                ->update(['cash_session_id' => $cashSession->id]);
+
+            PayrollPayment::whereNull('cash_session_id')
+                ->where('status', 'pagado')
+                ->where('created_at', '<=', $closedAt)
+                ->update(['cash_session_id' => $cashSession->id]);
+
+            EmployeeAdvance::whereNull('cash_session_id')
+                ->whereNotIn('status', ['anulado'])
+                ->where('created_at', '<=', $closedAt)
+                ->update(['cash_session_id' => $cashSession->id]);
+
+            EmployeeAdvancePayment::whereNull('cash_session_id')
+                ->where('payment_type', 'abono_efectivo')
+                ->where('created_at', '<=', $closedAt)
+                ->update(['cash_session_id' => $cashSession->id]);
+        });
+
+        $cashSession->refresh()->load(['openedBy:id,name', 'closedBy:id,name']);
 
         return response()->json([
             'cash_session' => $this->serializeSession($cashSession),
@@ -360,8 +399,8 @@ class CashSessionController extends Controller
     {
         $data = $this->serializeSession($session);
 
-        $movement = $this->reportService->cashMovementBetween(
-            $session->opened_at->copy()->startOfDay(),
+        $movement = $this->reportService->cashMovementForSession(
+            $session,
             ($session->closed_at ?? $expectedAt)->copy()->endOfDay(),
         );
 
@@ -385,15 +424,29 @@ class CashSessionController extends Controller
         $tz = config('app.timezone');
         $to = $session->closed_at ?? now($tz)->endOfDay();
 
-        $movement = $this->reportService->cashMovementBetween(
-            $session->opened_at->copy()->startOfDay(),
-            $to->copy()->endOfDay(),
-        );
+        $movement = $this->reportService->cashMovementForSession($session, $to->copy()->endOfDay());
 
         return $this->reportService->calculateExpectedClosing(
             $openingAmount ?? (float) $session->opening_amount,
             (float) $movement['movimiento_neto_efectivo'],
         );
+    }
+
+    /**
+     * Desglose de días/lavados pendientes de una sesión abierta desde hace más de
+     * un día, para mostrar en el resumen previo al cierre de caja.
+     */
+    private function pendingSummary(CashSession $session, Carbon $todayStart, Carbon $todayEnd): array
+    {
+        $porDia = $this->reportService->washPendingBreakdown($session, $todayEnd);
+
+        return [
+            'fecha_apertura' => $session->opened_at->toDateString(),
+            'dias_abiertos' => $session->opened_at->copy()->startOfDay()->diffInDays($todayStart) + 1,
+            'cantidad_lavados' => array_sum(array_column($porDia, 'cantidad')),
+            'monto_lavados' => round(array_sum(array_column($porDia, 'total')), 2),
+            'por_dia' => $porDia,
+        ];
     }
 
     private function serializeAdjustment(CashSessionAdjustment $adjustment): array

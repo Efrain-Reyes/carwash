@@ -10,12 +10,16 @@ import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_text_field.dart';
 import '../../../shared/widgets/section_header.dart';
+import '../models/advance_model.dart';
 import '../models/employee_model.dart';
 import '../services/payroll_service.dart';
 
 class RegisterAdvanceScreen extends StatefulWidget {
-  const RegisterAdvanceScreen({super.key, this.employee});
+  const RegisterAdvanceScreen({super.key, this.employee, this.existingAdvance});
   final Employee? employee;
+  final Advance? existingAdvance;
+
+  bool get isEditing => existingAdvance != null;
 
   @override
   State<RegisterAdvanceScreen> createState() => _RegisterAdvanceScreenState();
@@ -36,9 +40,15 @@ class _RegisterAdvanceScreenState extends State<RegisterAdvanceScreen> {
   @override
   void initState() {
     super.initState();
+    final existing = widget.existingAdvance;
+    if (existing != null) {
+      _amountCtrl.text = existing.amount.toStringAsFixed(2);
+      _notesCtrl.text = existing.notes ?? '';
+      _date = existing.advanceDate;
+    }
     if (widget.employee != null) {
       _selectedEmployee = widget.employee;
-    } else {
+    } else if (existing == null) {
       _loadEmployees();
     }
   }
@@ -88,9 +98,12 @@ class _RegisterAdvanceScreenState extends State<RegisterAdvanceScreen> {
     if (picked != null) setState(() => _date = picked);
   }
 
+  String get _employeeDisplayName =>
+      widget.employee?.fullName ?? widget.existingAdvance?.employeeName ?? '';
+
   bool get _canSave =>
       !_saving &&
-      _selectedEmployee != null &&
+      (widget.isEditing || _selectedEmployee != null) &&
       (double.tryParse(_amountCtrl.text.trim()) ?? 0) > 0;
 
   Future<void> _save() async {
@@ -100,29 +113,42 @@ class _RegisterAdvanceScreenState extends State<RegisterAdvanceScreen> {
       _error = null;
     });
 
-    final employeeId = _selectedEmployee!.id;
     final amount = double.tryParse(_amountCtrl.text.trim()) ?? 0;
     final date = Fmt.dateApi(_date);
     final notes = _notesCtrl.text.trim();
 
     try {
-      await PayrollService.createAdvance(
-        employeeId,
-        amount: amount,
-        advanceDate: date,
-        notes: notes.isEmpty ? null : notes,
-      );
+      if (widget.isEditing) {
+        await PayrollService.updateAdvance(
+          advanceId: widget.existingAdvance!.id,
+          amount: amount,
+          advanceDate: date,
+          notes: notes,
+        );
+      } else {
+        final employeeId = _selectedEmployee!.id;
+        await PayrollService.createAdvance(
+          employeeId,
+          amount: amount,
+          advanceDate: date,
+          notes: notes.isEmpty ? null : notes,
+        );
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Adelanto registrado correctamente'),
+        SnackBar(
+          content: Text(
+            widget.isEditing
+                ? 'Adelanto actualizado correctamente'
+                : 'Adelanto registrado correctamente',
+          ),
           backgroundColor: AppColors.successFg,
         ),
       );
       context.pop(true);
     } on DioException catch (e) {
       debugPrint(
-        '[RegisterAdvanceScreen] POST advance error status=${e.response?.statusCode} '
+        '[RegisterAdvanceScreen] advance error status=${e.response?.statusCode} '
         'body=${e.response?.data}',
       );
       if (!mounted) return;
@@ -131,10 +157,12 @@ class _RegisterAdvanceScreenState extends State<RegisterAdvanceScreen> {
         _saving = false;
       });
     } catch (e) {
-      debugPrint('[RegisterAdvanceScreen] POST advance unexpected error: $e');
+      debugPrint('[RegisterAdvanceScreen] advance unexpected error: $e');
       if (!mounted) return;
       setState(() {
-        _error = 'No se pudo registrar el adelanto. Intenta de nuevo.';
+        _error = widget.isEditing
+            ? 'No se pudo actualizar el adelanto. Intenta de nuevo.'
+            : 'No se pudo registrar el adelanto. Intenta de nuevo.';
         _saving = false;
       });
     }
@@ -152,7 +180,9 @@ class _RegisterAdvanceScreenState extends State<RegisterAdvanceScreen> {
         return first.toString();
       }
     }
-    return 'No se pudo registrar el adelanto. Intenta de nuevo.';
+    return widget.isEditing
+        ? 'No se pudo actualizar el adelanto. Intenta de nuevo.'
+        : 'No se pudo registrar el adelanto. Intenta de nuevo.';
   }
 
   @override
@@ -194,8 +224,8 @@ class _RegisterAdvanceScreenState extends State<RegisterAdvanceScreen> {
                     const SizedBox(height: 12),
                   ],
 
-                  // Employee selector (only when not pre-filled)
-                  if (widget.employee == null) ...[
+                  // Employee selector (only when not pre-filled and not editing)
+                  if (widget.employee == null && !widget.isEditing) ...[
                     SectionHeader(title: 'Trabajador'),
                     const SizedBox(height: 10),
                     AppCard(child: _buildEmployeeSelector()),
@@ -218,9 +248,8 @@ class _RegisterAdvanceScreenState extends State<RegisterAdvanceScreen> {
                             ),
                             child: Center(
                               child: Text(
-                                widget.employee!.firstName.isNotEmpty
-                                    ? widget.employee!.firstName[0]
-                                          .toUpperCase()
+                                _employeeDisplayName.isNotEmpty
+                                    ? _employeeDisplayName[0].toUpperCase()
                                     : '?',
                                 style: GoogleFonts.inter(
                                   fontSize: 16,
@@ -236,14 +265,14 @@ class _RegisterAdvanceScreenState extends State<RegisterAdvanceScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  widget.employee!.fullName,
+                                  _employeeDisplayName,
                                   style: GoogleFonts.inter(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w700,
                                     color: AppColors.textPrimary,
                                   ),
                                 ),
-                                if (widget.employee!.currentSalary != null)
+                                if (widget.employee?.currentSalary != null)
                                   Text(
                                     'Sueldo: ${Fmt.lempira(widget.employee!.currentSalary!.salary)}',
                                     style: GoogleFonts.inter(
@@ -339,10 +368,14 @@ class _RegisterAdvanceScreenState extends State<RegisterAdvanceScreen> {
 
                   const SizedBox(height: 24),
                   AppButton(
-                    label: 'Registrar adelanto',
+                    label: widget.isEditing
+                        ? 'Guardar cambios'
+                        : 'Registrar adelanto',
                     onPressed: _canSave ? _save : null,
                     loading: _saving,
-                    icon: Icons.account_balance_wallet_rounded,
+                    icon: widget.isEditing
+                        ? Icons.save_rounded
+                        : Icons.account_balance_wallet_rounded,
                   ),
                 ],
               ),
@@ -474,7 +507,7 @@ class _RegisterAdvanceScreenState extends State<RegisterAdvanceScreen> {
               ),
               Expanded(
                 child: Text(
-                  'Registrar adelanto',
+                  widget.isEditing ? 'Editar adelanto' : 'Registrar adelanto',
                   style: GoogleFonts.inter(
                     fontSize: 20,
                     fontWeight: FontWeight.w800,

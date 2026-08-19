@@ -225,6 +225,7 @@ class _HomeTabBodyState extends State<_HomeTabBody> {
     final notesController = TextEditingController();
     final homeProvider = context.read<HomeProvider>();
     final report = homeProvider.report;
+    final pendingSummary = homeProvider.pendingSummary;
     final washes = homeProvider.recentWashes
         .where((wash) => wash.isCompleted)
         .toList();
@@ -292,6 +293,11 @@ class _HomeTabBodyState extends State<_HomeTabBody> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _CloseCashSummary(report: report, cash: cash),
+                    if (pendingSummary != null &&
+                        pendingSummary.diasAbiertos > 1) ...[
+                      const SizedBox(height: 12),
+                      _PendingDaysBanner(summary: pendingSummary),
+                    ],
                     const SizedBox(height: 12),
                     _CloseCashHelpText(),
                     const SizedBox(height: 12),
@@ -662,6 +668,27 @@ class _Content extends StatelessWidget {
                 ),
               ],
             ),
+
+            if (isAdmin) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: _QuickCard(
+                      icon: Icons.category_rounded,
+                      label: 'Catálogo',
+                      onTap: () => context.push(AppRouter.catalog),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  const Expanded(child: SizedBox()),
+                  const SizedBox(width: 10),
+                  const Expanded(child: SizedBox()),
+                  const SizedBox(width: 10),
+                  const Expanded(child: SizedBox()),
+                ],
+              ),
+            ],
 
             const SizedBox(height: 16),
 
@@ -1055,6 +1082,86 @@ class _DifferenceBox extends StatelessWidget {
   }
 }
 
+class _PendingDaysBanner extends StatelessWidget {
+  const _PendingDaysBanner({required this.summary});
+
+  final PendingCashSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final fecha = summary.fechaApertura;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.warningDot.withAlpha(20),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.warningDot.withAlpha(60)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.warning_amber_rounded,
+                size: 16,
+                color: AppColors.warningDot,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  fecha != null
+                      ? 'Caja abierta desde el ${Fmt.dateFull(fecha)}'
+                      : 'Caja con varios días pendientes de cierre',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${summary.diasAbiertos} días pendientes de cierre · '
+            '${summary.cantidadLavados} lavados por ${Fmt.lempira(summary.montoLavados)}',
+            style: GoogleFonts.inter(fontSize: 12, color: AppColors.textMuted),
+          ),
+          if (summary.porDia.length > 1) ...[
+            const SizedBox(height: 8),
+            for (final day in summary.porDia)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      day.fecha != null ? Fmt.dateShort(day.fecha!) : '—',
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                    Text(
+                      '${day.cantidad} lavados · ${Fmt.lempira(day.total)}',
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _DayWashesList extends StatelessWidget {
   const _DayWashesList({required this.washes});
 
@@ -1063,7 +1170,7 @@ class _DayWashesList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _DetailListShell(
-      title: 'Lavados del día',
+      title: 'Lavados pendientes de cierre',
       empty: 'Sin lavados registrados.',
       children: [
         for (final wash in washes)

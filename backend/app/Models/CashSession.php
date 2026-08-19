@@ -47,4 +47,20 @@ class CashSession extends Model
     {
         return $this->hasMany(CashSessionAdjustment::class);
     }
+
+    public function washes(): HasMany
+    {
+        return $this->hasMany(Wash::class);
+    }
+
+    /**
+     * Id de la sesión de caja abierta, bloqueando la fila (debe llamarse dentro
+     * de una transacción). Serializa contra CashSessionController::close() para
+     * que ningún movimiento de efectivo se registre a mitad de un cierre sin
+     * quedar contabilizado ni reclamado.
+     */
+    public static function openSessionIdForUpdate(): ?int
+    {
+        return static::where('status', 'abierta')->lockForUpdate()->value('id');
+    }
 }

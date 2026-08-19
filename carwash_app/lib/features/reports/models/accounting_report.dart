@@ -131,6 +131,7 @@ class CurrentCashSessionResponse {
   final bool requiresFirstCashSession;
   final bool pendingClosure;
   final bool openedAutomatically;
+  final PendingCashSummary? pendingSummary;
 
   const CurrentCashSessionResponse({
     required this.cashSession,
@@ -138,10 +139,12 @@ class CurrentCashSessionResponse {
     required this.requiresFirstCashSession,
     required this.pendingClosure,
     required this.openedAutomatically,
+    this.pendingSummary,
   });
 
   factory CurrentCashSessionResponse.fromJson(Map<String, dynamic> json) {
     final cashSession = json['cash_session'];
+    final pendingSummary = json['pending_summary'];
     return CurrentCashSessionResponse(
       cashSession: cashSession is Map<String, dynamic>
           ? AccountingCash.fromJson(cashSession)
@@ -150,6 +153,57 @@ class CurrentCashSessionResponse {
       requiresFirstCashSession: json['requires_first_cash_session'] == true,
       pendingClosure: json['pending_closure'] == true,
       openedAutomatically: json['opened_automatically'] == true,
+      pendingSummary: pendingSummary is Map<String, dynamic>
+          ? PendingCashSummary.fromJson(pendingSummary)
+          : null,
+    );
+  }
+}
+
+/// Desglose de días/lavados pendientes de una sesión de caja abierta hace más
+/// de un día — permite mostrar en el resumen de cierre cuánto llevaba
+/// acumulado, en vez de solo los datos de hoy.
+class PendingCashSummary {
+  final DateTime? fechaApertura;
+  final int diasAbiertos;
+  final int cantidadLavados;
+  final double montoLavados;
+  final List<PendingCashDay> porDia;
+
+  const PendingCashSummary({
+    this.fechaApertura,
+    required this.diasAbiertos,
+    required this.cantidadLavados,
+    required this.montoLavados,
+    required this.porDia,
+  });
+
+  factory PendingCashSummary.fromJson(Map<String, dynamic> json) {
+    final porDia = json['por_dia'] as List? ?? [];
+    return PendingCashSummary(
+      fechaApertura: _asDate(json['fecha_apertura']),
+      diasAbiertos: _asInt(json['dias_abiertos']),
+      cantidadLavados: _asInt(json['cantidad_lavados']),
+      montoLavados: _asDouble(json['monto_lavados']),
+      porDia: porDia
+          .map((e) => PendingCashDay.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+}
+
+class PendingCashDay {
+  final DateTime? fecha;
+  final int cantidad;
+  final double total;
+
+  const PendingCashDay({this.fecha, required this.cantidad, required this.total});
+
+  factory PendingCashDay.fromJson(Map<String, dynamic> json) {
+    return PendingCashDay(
+      fecha: _asDate(json['fecha']),
+      cantidad: _asInt(json['cantidad']),
+      total: _asDouble(json['total']),
     );
   }
 }

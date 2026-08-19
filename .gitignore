@@ -21,3 +21,7 @@ carwash_app/.packages
 # Logs
 *.log.claude/
 .claude/
+
+# Backups de base de datos (datos reales de producción, nunca subir)
+backups/
+*.sql

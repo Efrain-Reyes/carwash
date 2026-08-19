@@ -47,6 +47,22 @@ class WashesService {
     };
   }
 
+  /// Lavados completados de una sesión de caja específica (no solo "hoy"), para
+  /// que el resumen previo al cierre muestre todos los pendientes acumulados.
+  static Future<List<WashItem>> getForCashSession(int cashSessionId) async {
+    final response = await ApiClient.instance.get(
+      '/washes',
+      queryParameters: {
+        'cash_session_id': cashSessionId,
+        'status': 'completado',
+      },
+    );
+    final data = (response.data['data'] as List?) ?? [];
+    return data
+        .map((e) => WashItem.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
   static Future<List<VehicleType>> getVehicleTypes() async {
     final response = await ApiClient.instance.get('/vehicle-types');
     final data = (response.data as List?) ?? [];

@@ -3,7 +3,11 @@
 namespace Tests\Feature;
 
 use App\Models\CashSession;
+use App\Models\ExpenseSupplier;
 use App\Models\User;
+use App\Models\VehicleType;
+use App\Models\Wash;
+use App\Models\WashService;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -260,6 +264,185 @@ class CashSessionFlowTest extends TestCase
             'opening_amount' => 100,
             'expected_closing_amount' => 120,
         ]);
+    }
+
+    /**
+     * Reproduce el bug reportado: una caja se cierra el lunes, se abre otra el
+     * martes, y el usuario no cierra caja en toda la semana. El viernes registra
+     * en el sistema un lavado que ocurrió el lunes (registered_at pasado). Antes
+     * del fix, ese lavado quedaba fuera del rango [martes → viernes] de la sesión
+     * abierta y nunca se contabilizaba en ningún cierre. Con el fix, el lavado se
+     * sella con la sesión abierta al momento de crearse (la de martes), así que
+     * SIEMPRE se cuenta en el cierre de esa sesión sin importar su registered_at.
+     */
+    public function test_wash_registered_late_is_included_in_the_currently_open_session_closing(): void
+    {
+        [$vehicleType, $service] = $this->vehicleAndService();
+        $operator = $this->operator();
+
+        // Lunes: se abre y se cierra la primera caja normalmente.
+        Carbon::setTestNow(Carbon::parse('2026-05-11 08:00:00', config('app.timezone')));
+        $monday = CashSession::create([
+            'opening_amount' => 100,
+            'opened_at' => Carbon::parse('2026-05-11 08:00:00', config('app.timezone')),
+            'status' => 'abierta',
+        ]);
+
+        $this->actingAs($this->admin(), 'sanctum')
+            ->patchJson("/api/cash-sessions/{$monday->id}/close", [
+                'counted_closing_amount' => 100,
+            ])
+            ->assertOk();
+
+        // Martes: se abre la siguiente caja (sesión que quedará abierta toda la semana).
+        Carbon::setTestNow(Carbon::parse('2026-05-12 08:00:00', config('app.timezone')));
+        $tuesday = CashSession::create([
+            'opening_amount' => 100,
+            'opened_at' => Carbon::parse('2026-05-12 08:00:00', config('app.timezone')),
+            'status' => 'abierta',
+        ]);
+
+        // Viernes: el operador registra en el sistema un lavado que ocurrió el lunes.
+        Carbon::setTestNow(Carbon::parse('2026-05-15 09:00:00', config('app.timezone')));
+        $this->actingAs($operator, 'sanctum')
+            ->postJson('/api/washes', [
+                'vehicle_type_id' => $vehicleType->id,
+                'wash_service_id' => $service->id,
+                'registered_at' => '2026-05-11 10:00:00',
+            ])
+            ->assertCreated();
+
+        // El lavado atrasado debe quedar sellado a la sesión que estaba abierta
+        // cuando se registró (martes), no a la del lunes (ya cerrada).
+        $this->assertDatabaseHas('washes', [
+            'cash_session_id' => $tuesday->id,
+            'price' => 250,
+        ]);
+
+        // Un lavado normal de esta misma semana también debe sumar.
+        $this->actingAs($operator, 'sanctum')
+            ->postJson('/api/washes', [
+                'vehicle_type_id' => $vehicleType->id,
+                'wash_service_id' => $service->id,
+            ])
+            ->assertCreated();
+
+        // Al cerrar la caja del viernes, el total debe incluir AMBOS lavados (250 + 250 = 500),
+        // no solo el de hoy. Antes del fix, este total daba 250 (el atrasado se perdía).
+        $this->actingAs($this->admin(), 'sanctum')
+            ->patchJson("/api/cash-sessions/{$tuesday->id}/close", [
+                'counted_closing_amount' => 600,
+            ])
+            ->assertOk()
+            ->assertJsonPath('cash_session.expected_closing_amount', 600)
+            ->assertJsonPath('movimiento.ingresos_lavados', 500);
+    }
+
+    /**
+     * Un lavado huérfano legacy (cash_session_id nulo, como los que existían antes
+     * del fix) debe ser reclamado y contabilizado por el próximo cierre real,
+     * gracias a la red de seguridad en AccountingReportService::washesQuery().
+     */
+    public function test_orphan_wash_without_cash_session_is_claimed_by_the_next_closing(): void
+    {
+        [$vehicleType, $service] = $this->vehicleAndService();
+
+        Carbon::setTestNow(Carbon::parse('2026-05-12 08:00:00', config('app.timezone')));
+        $session = CashSession::create([
+            'opening_amount' => 100,
+            'opened_at' => Carbon::parse('2026-05-12 08:00:00', config('app.timezone')),
+            'status' => 'abierta',
+        ]);
+
+        // Simula un lavado huérfano (dato legacy anterior al fix, cash_session_id nulo).
+        Wash::create([
+            'user_id' => $this->operator()->id,
+            'cash_session_id' => null,
+            'vehicle_type_id' => $vehicleType->id,
+            'wash_service_id' => $service->id,
+            'price' => 250,
+            'status' => 'completado',
+            'registered_at' => Carbon::parse('2026-05-10 10:00:00', config('app.timezone')),
+        ]);
+
+        Carbon::setTestNow(Carbon::parse('2026-05-15 09:00:00', config('app.timezone')));
+
+        $this->actingAs($this->admin(), 'sanctum')
+            ->patchJson("/api/cash-sessions/{$session->id}/close", [
+                'counted_closing_amount' => 350,
+            ])
+            ->assertOk()
+            ->assertJsonPath('movimiento.ingresos_lavados', 250);
+
+        $this->assertDatabaseHas('washes', [
+            'cash_session_id' => $session->id,
+            'price' => 250,
+        ]);
+    }
+
+    /**
+     * Mismo patrón del bug de lavados, aplicado a gastos: un gasto registrado con
+     * fecha atrasada (de una sesión ya cerrada) debe sumarse al cierre de la
+     * sesión que está abierta cuando se captura en el sistema, no perderse.
+     */
+    public function test_expense_registered_late_is_included_in_the_currently_open_session_closing(): void
+    {
+        $supplier = ExpenseSupplier::create(['name' => 'Proveedor X', 'is_active' => true]);
+        $admin = $this->admin();
+
+        Carbon::setTestNow(Carbon::parse('2026-05-11 08:00:00', config('app.timezone')));
+        $monday = CashSession::create([
+            'opening_amount' => 100,
+            'opened_at' => Carbon::parse('2026-05-11 08:00:00', config('app.timezone')),
+            'status' => 'abierta',
+        ]);
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson("/api/cash-sessions/{$monday->id}/close", ['counted_closing_amount' => 100])
+            ->assertOk();
+
+        Carbon::setTestNow(Carbon::parse('2026-05-12 08:00:00', config('app.timezone')));
+        $tuesday = CashSession::create([
+            'opening_amount' => 100,
+            'opened_at' => Carbon::parse('2026-05-12 08:00:00', config('app.timezone')),
+            'status' => 'abierta',
+        ]);
+
+        // El viernes se registra un gasto que ocurrió el lunes.
+        Carbon::setTestNow(Carbon::parse('2026-05-15 09:00:00', config('app.timezone')));
+        $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/expenses', [
+                'supplier_id' => $supplier->id,
+                'is_internal_invoice' => true,
+                'expense_date' => '2026-05-11 10:00:00',
+                'items' => [
+                    ['description' => 'Jabón', 'quantity' => 1, 'unit_price' => 80],
+                ],
+            ])
+            ->assertCreated();
+
+        $this->assertDatabaseHas('expenses', [
+            'cash_session_id' => $tuesday->id,
+            'total' => 80,
+        ]);
+
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson("/api/cash-sessions/{$tuesday->id}/close", ['counted_closing_amount' => 20])
+            ->assertOk()
+            ->assertJsonPath('movimiento.total_gastos', 80);
+    }
+
+    private function vehicleAndService(): array
+    {
+        $vehicleType = VehicleType::create(['name' => 'Carro', 'is_active' => true]);
+        $service = WashService::create([
+            'vehicle_type_id' => $vehicleType->id,
+            'name' => 'Lavado básico',
+            'base_price' => 250,
+            'is_custom' => false,
+            'is_active' => true,
+        ]);
+
+        return [$vehicleType, $service];
     }
 
     private function admin(): User

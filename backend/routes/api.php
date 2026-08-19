@@ -35,10 +35,12 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Catálogo — tipos de vehículo
     Route::get('vehicle-types', [VehicleTypeController::class, 'index'])->middleware('can:vehicle_types.view');
+    Route::post('vehicle-types', [VehicleTypeController::class, 'store'])->middleware('can:catalog.manage');
     Route::patch('vehicle-types/{vehicleType}/toggle', [VehicleTypeController::class, 'toggle'])->middleware('can:catalog.manage');
 
     // Catálogo — servicios de lavado
     Route::get('wash-services', [WashServiceController::class, 'index'])->middleware('can:wash_services.view');
+    Route::post('wash-services', [WashServiceController::class, 'store'])->middleware('can:catalog.manage');
     Route::patch('wash-services/{washService}', [WashServiceController::class, 'update'])->middleware('can:catalog.manage');
     Route::patch('wash-services/{washService}/toggle', [WashServiceController::class, 'toggle'])->middleware('can:catalog.manage');
 
@@ -71,6 +73,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('employees/{employee}/advances', [AdvanceController::class, 'index'])->middleware('can:advance.view');
     Route::post('employees/{employee}/advances', [AdvanceController::class, 'store'])->middleware('can:advance.manage');
     Route::get('advances/{advance}', [AdvanceController::class, 'show'])->middleware('can:advance.view');
+    Route::put('advances/{advance}', [AdvanceController::class, 'update'])->middleware('can:advance.manage');
     Route::post('advances/{advance}/payments', [AdvanceController::class, 'storePayment'])->middleware('can:advance.manage');
     Route::patch('advances/{advance}/cancel', [AdvanceController::class, 'cancel'])->middleware('can:advance.manage');
 

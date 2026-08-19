@@ -124,7 +124,7 @@ class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
     final emp = _full ?? widget.employee;
     final done = await context.push<bool>(
       AppRouter.registerAdvance,
-      extra: emp,
+      extra: {'employee': emp},
     );
     if ((done ?? false) && mounted) {
       _didChange = true;
@@ -132,6 +132,33 @@ class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
         _loadingAdvances = true;
       });
       _loadAdvances();
+    }
+  }
+
+  Future<void> _goToEditAdvance(Advance advance) async {
+    final emp = _full ?? widget.employee;
+    final done = await context.push<bool>(
+      AppRouter.registerAdvance,
+      extra: {'employee': emp, 'existingAdvance': advance},
+    );
+    if ((done ?? false) && mounted) {
+      _didChange = true;
+      setState(() {
+        _loadingAdvances = true;
+      });
+      _loadAdvances();
+    }
+  }
+
+  Future<void> _goToEditSalary() async {
+    final emp = _full ?? widget.employee;
+    final done = await context.push<bool>(
+      AppRouter.editSalary,
+      extra: emp,
+    );
+    if ((done ?? false) && mounted) {
+      _didChange = true;
+      _loadFull();
     }
   }
 
@@ -391,9 +418,28 @@ class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
     final salary = _display.currentSalary;
     if (salary == null) {
       return AppCard(
-        child: Text(
-          'Sin salario registrado',
-          style: GoogleFonts.inter(fontSize: 13, color: AppColors.textMuted),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Sin salario registrado',
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  color: AppColors.textMuted,
+                ),
+              ),
+            ),
+            IconButton(
+              onPressed: _goToEditSalary,
+              icon: const Icon(
+                Icons.edit_outlined,
+                size: 18,
+                color: AppColors.accent,
+              ),
+              tooltip: 'Editar sueldo',
+              visualDensity: VisualDensity.compact,
+            ),
+          ],
         ),
       );
     }
@@ -401,14 +447,32 @@ class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'SALARIO ACTUAL',
-            style: GoogleFonts.inter(
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textMuted,
-              letterSpacing: 0.8,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'SALARIO ACTUAL',
+                  style: GoogleFonts.inter(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textMuted,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: _goToEditSalary,
+                icon: const Icon(
+                  Icons.edit_outlined,
+                  size: 18,
+                  color: AppColors.accent,
+                ),
+                tooltip: 'Editar sueldo',
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+            ],
           ),
           const SizedBox(height: 10),
           Text(
@@ -499,7 +563,12 @@ class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
                 .map(
                   (a) => Padding(
                     padding: const EdgeInsets.only(bottom: 8),
-                    child: _AdvanceCard(advance: a),
+                    child: _AdvanceCard(
+                      advance: a,
+                      onEdit: (a.isPending || a.isPartial)
+                          ? () => _goToEditAdvance(a)
+                          : null,
+                    ),
                   ),
                 )
                 .toList(),
@@ -838,8 +907,9 @@ Color _payrollStatusDot(String status) => switch (status) {
 // ─── Advance card ─────────────────────────────────────────────────────────────
 
 class _AdvanceCard extends StatelessWidget {
-  const _AdvanceCard({required this.advance});
+  const _AdvanceCard({required this.advance, this.onEdit});
   final Advance advance;
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -861,6 +931,21 @@ class _AdvanceCard extends StatelessWidget {
                 ),
               ),
               StatusBadge.advance(_toAdvanceStatus(advance.status)),
+              if (onEdit != null) ...[
+                const SizedBox(width: 6),
+                IconButton(
+                  onPressed: onEdit,
+                  icon: const Icon(
+                    Icons.edit_outlined,
+                    size: 18,
+                    color: AppColors.accent,
+                  ),
+                  tooltip: 'Editar adelanto',
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
             ],
           ),
           const SizedBox(height: 6),

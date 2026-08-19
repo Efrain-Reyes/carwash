@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\CashSession;
 use App\Models\EmployeeAdvance;
 use App\Models\EmployeeAdvancePayment;
 use App\Models\EmployeeSalaryHistory;
@@ -50,7 +51,10 @@ class PayrollService
     public function confirmPayment(PayrollPayment $payment): PayrollPayment
     {
         return DB::transaction(function () use ($payment) {
-            $payment->update(['status' => 'pagado']);
+            $payment->update([
+                'status'           => 'pagado',
+                'cash_session_id'  => CashSession::openSessionIdForUpdate(),
+            ]);
 
             if ($payment->advance_discount > 0) {
                 $this->applyAdvanceDiscount($payment);
@@ -109,6 +113,7 @@ class PayrollService
 
             EmployeeAdvancePayment::create([
                 'advance_id'         => $advance->id,
+                'cash_session_id'    => $payment->cash_session_id,
                 'payroll_payment_id' => $payment->id,
                 'user_id'            => $payment->processed_by,
                 'amount'             => $deduction,

@@ -10,6 +10,7 @@ use App\Models\ExpenseItem;
 use App\Models\PayrollPayment;
 use App\Models\Wash;
 use Carbon\CarbonPeriod;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 
 class AccountingReportService
@@ -17,6 +18,10 @@ class AccountingReportService
     private Carbon $from;
 
     private Carbon $to;
+
+    // Cuando está seteada, washesQuery() calcula por cash_session_id (más huérfanos
+    // capturados hasta $this->to) en vez de por rango de registered_at.
+    private ?CashSession $session = null;
 
     public function generate(string $dateFrom, string $dateTo): array
     {
@@ -98,6 +103,50 @@ class AccountingReportService
         $this->setExactRange($from, $to);
 
         return $this->movementSummary();
+    }
+
+    /**
+     * Movimiento de una sesión de caja específica: los lavados se atribuyen por
+     * cash_session_id (asignado al crearse), no por rango de registered_at, para
+     * que un lavado registrado con retraso siempre se cuente en la caja que estaba
+     * abierta cuando se capturó. Incluye además, como red de seguridad, cualquier
+     * lavado huérfano (cash_session_id nulo, dato legacy o de carrera) capturado
+     * hasta $to.
+     */
+    public function cashMovementForSession(CashSession $session, Carbon $to): array
+    {
+        $this->session = $session;
+        $this->setExactRange($session->opened_at, $to);
+
+        $result = $this->movementSummary();
+
+        $this->session = null;
+
+        return $result;
+    }
+
+    /**
+     * Desglose día por día de los lavados pendientes de una sesión abierta, para
+     * mostrar en el resumen previo al cierre cuántos días/lavados llevan sin cerrar.
+     */
+    public function washPendingBreakdown(CashSession $session, Carbon $to): array
+    {
+        $this->session = $session;
+        $this->setExactRange($session->opened_at, $to);
+
+        $rows = $this->washesQuery()
+            ->selectRaw('DATE(registered_at) as fecha, COUNT(*) as cantidad, SUM(price) as total')
+            ->groupBy('fecha')
+            ->orderBy('fecha')
+            ->get();
+
+        $this->session = null;
+
+        return $rows->map(fn ($r) => [
+            'fecha' => $r->fecha,
+            'cantidad' => (int) $r->cantidad,
+            'total' => (float) $r->total,
+        ])->toArray();
     }
 
     public function calculateExpectedClosing(float $openingAmount, float $movement): float
@@ -188,47 +237,84 @@ class AccountingReportService
         ];
     }
 
+    /**
+     * Aplica el mismo criterio de atribución a cualquier query de movimiento de
+     * efectivo (lavados, gastos, nómina, adelantos, abonos): si hay una sesión de
+     * caja seteada (cashMovementForSession/washPendingBreakdown), filtra por
+     * cash_session_id en vez de por rango de fecha, más los huérfanos
+     * (cash_session_id nulo — datos legacy o de carrera) capturados hasta
+     * $this->to, para que nada se pierda entre sesiones. Sin sesión seteada
+     * (reportes por rango de fechas), usa el rango de fechas de siempre.
+     */
+    private function sessionScopedQuery(Builder $query, string $dateColumn): Builder
+    {
+        if ($this->session) {
+            $sessionId = $this->session->id;
+            $to = $this->to;
+
+            $query->where(function ($q) use ($sessionId, $to) {
+                $q->where('cash_session_id', $sessionId)
+                    ->orWhere(function ($q2) use ($to) {
+                        $q2->whereNull('cash_session_id')
+                            ->where('created_at', '<=', $to);
+                    });
+            });
+        } else {
+            $query->whereBetween($dateColumn, [$this->from, $this->to]);
+        }
+
+        return $query;
+    }
+
+    private function washesQuery(): Builder
+    {
+        return $this->sessionScopedQuery(Wash::where('status', 'completado'), 'registered_at');
+    }
+
     private function totalIngresos(): float
     {
-        return (float) Wash::where('status', 'completado')
-            ->whereBetween('registered_at', [$this->from, $this->to])
-            ->sum('price');
+        return (float) $this->washesQuery()->sum('price');
     }
 
     private function totalGastos(): float
     {
-        return (float) Expense::where('status', 'activo')
-            ->whereBetween('expense_date', [$this->from, $this->to])
-            ->sum('total');
+        return (float) $this->sessionScopedQuery(
+            Expense::where('status', 'activo'),
+            'expense_date'
+        )->sum('total');
     }
 
     private function sueldoDevengado(): float
     {
-        return (float) PayrollPayment::where('status', 'pagado')
-            ->whereBetween('payment_date', [$this->from, $this->to])
-            ->sum('gross_amount');
+        return (float) $this->sessionScopedQuery(
+            PayrollPayment::where('status', 'pagado'),
+            'payment_date'
+        )->sum('gross_amount');
     }
 
     private function nominaNetaPagada(): float
     {
-        return (float) PayrollPayment::where('status', 'pagado')
-            ->whereBetween('payment_date', [$this->from, $this->to])
-            ->sum('net_amount');
+        return (float) $this->sessionScopedQuery(
+            PayrollPayment::where('status', 'pagado'),
+            'payment_date'
+        )->sum('net_amount');
     }
 
     private function adelantosEntregados(): float
     {
-        return (float) EmployeeAdvance::whereNotIn('status', ['anulado'])
-            ->whereBetween('advance_date', [$this->from, $this->to])
-            ->sum('amount');
+        return (float) $this->sessionScopedQuery(
+            EmployeeAdvance::whereNotIn('status', ['anulado']),
+            'advance_date'
+        )->sum('amount');
     }
 
     private function abonosRecibidos(): float
     {
-        return (float) EmployeeAdvancePayment::where('payment_type', 'abono_efectivo')
-            ->whereHas('advance', fn ($q) => $q->where('status', '!=', 'anulado'))
-            ->whereBetween('payment_date', [$this->from, $this->to])
-            ->sum('amount');
+        return (float) $this->sessionScopedQuery(
+            EmployeeAdvancePayment::where('payment_type', 'abono_efectivo')
+                ->whereHas('advance', fn ($q) => $q->where('status', '!=', 'anulado')),
+            'payment_date'
+        )->sum('amount');
     }
 
     // ──────────────────────────────────────────────
@@ -237,15 +323,12 @@ class AccountingReportService
 
     private function cantidadLavados(): int
     {
-        return Wash::where('status', 'completado')
-            ->whereBetween('registered_at', [$this->from, $this->to])
-            ->count();
+        return $this->washesQuery()->count();
     }
 
     private function statsPorVehiculo(): array
     {
-        return Wash::where('status', 'completado')
-            ->whereBetween('registered_at', [$this->from, $this->to])
+        return $this->washesQuery()
             ->join('vehicle_types', 'washes.vehicle_type_id', '=', 'vehicle_types.id')
             ->selectRaw('vehicle_types.name as tipo, COUNT(*) as cantidad, SUM(washes.price) as total')
             ->groupBy('vehicle_types.id', 'vehicle_types.name')
@@ -261,8 +344,7 @@ class AccountingReportService
 
     private function statsPorServicio(): array
     {
-        return Wash::where('status', 'completado')
-            ->whereBetween('registered_at', [$this->from, $this->to])
+        return $this->washesQuery()
             ->join('wash_services', 'washes.wash_service_id', '=', 'wash_services.id')
             ->join('vehicle_types', 'washes.vehicle_type_id', '=', 'vehicle_types.id')
             ->selectRaw('vehicle_types.name as vehiculo, wash_services.name as servicio, COUNT(*) as cantidad, SUM(washes.price) as total')

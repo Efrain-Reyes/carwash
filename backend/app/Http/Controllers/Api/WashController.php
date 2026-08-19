@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\StoreWashRequest;
+use App\Models\CashSession;
 use App\Models\Wash;
 use App\Models\WashService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class WashController extends Controller
 {
@@ -42,6 +44,10 @@ class WashController extends Controller
 
         if ($request->filled('wash_service_id')) {
             $query->where('wash_service_id', $request->wash_service_id);
+        }
+
+        if ($request->filled('cash_session_id')) {
+            $query->where('cash_session_id', $request->cash_session_id);
         }
 
         if ($user->can('wash.view') && $request->filled('user_id')) {
@@ -78,16 +84,21 @@ class WashController extends Controller
             ? Carbon::parse($request->registered_at, config('app.timezone'))
             : now();
 
-        $wash = Wash::create([
-            'user_id'            => $request->user()->id,
-            'vehicle_type_id'    => $request->vehicle_type_id,
-            'wash_service_id'    => $request->wash_service_id,
-            'custom_description' => $customDescription,
-            'price'              => $price,
-            'status'             => 'completado',
-            'notes'              => $request->notes,
-            'registered_at'      => $registeredAt,
-        ]);
+        $wash = DB::transaction(function () use ($request, $customDescription, $price, $registeredAt) {
+            $wash = Wash::create([
+                'user_id'            => $request->user()->id,
+                'cash_session_id'    => CashSession::openSessionIdForUpdate(),
+                'vehicle_type_id'    => $request->vehicle_type_id,
+                'wash_service_id'    => $request->wash_service_id,
+                'custom_description' => $customDescription,
+                'price'              => $price,
+                'status'             => 'completado',
+                'notes'              => $request->notes,
+                'registered_at'      => $registeredAt,
+            ]);
+
+            return $wash;
+        });
 
         $wash->load(['vehicleType', 'washService', 'user:id,name']);
 

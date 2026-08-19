@@ -9,6 +9,7 @@ class Wash extends Model
 {
     protected $fillable = [
         'user_id',
+        'cash_session_id',
         'vehicle_type_id',
         'wash_service_id',
         'custom_description',
@@ -39,5 +40,10 @@ class Wash extends Model
     public function washService(): BelongsTo
     {
         return $this->belongsTo(WashService::class);
+    }
+
+    public function cashSession(): BelongsTo
+    {
+        return $this->belongsTo(CashSession::class);
     }
 }

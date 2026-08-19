@@ -11,8 +11,10 @@ class WashServiceController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
+        $showAll = $request->boolean('include_inactive') && ($request->user()?->can('catalog.manage') ?? false);
+
         $query = WashService::with('vehicleType')
-            ->where('is_active', true)
+            ->when(! $showAll, fn ($q) => $q->where('is_active', true))
             ->orderBy('vehicle_type_id')
             ->orderBy('id');
 
@@ -21,6 +23,25 @@ class WashServiceController extends Controller
         }
 
         return response()->json($query->get());
+    }
+
+    public function store(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'vehicle_type_id' => 'required|integer|exists:vehicle_types,id',
+            'name'            => 'required|string|max:100',
+            'is_custom'       => 'boolean',
+            'base_price'      => ['required_if:is_custom,false', 'nullable', 'numeric', 'min:0'],
+        ]);
+
+        $data['is_custom'] = $data['is_custom'] ?? false;
+
+        $washService = WashService::create([
+            ...$data,
+            'is_active' => true,
+        ]);
+
+        return response()->json($washService->load('vehicleType'), 201);
     }
 
     public function update(Request $request, WashService $washService): JsonResponse

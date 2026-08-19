@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class EmployeeAdvancePayment extends Model
 {
     protected $fillable = [
+        'cash_session_id',
         'advance_id',
         'payroll_payment_id',
         'user_id',
@@ -38,5 +39,10 @@ class EmployeeAdvancePayment extends Model
     public function registeredBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function cashSession(): BelongsTo
+    {
+        return $this->belongsTo(CashSession::class);
     }
 }

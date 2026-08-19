@@ -21,6 +21,7 @@ class HomeProvider extends ChangeNotifier {
 
   AccountingReport? get report => _report;
   CurrentCashSessionResponse? get cashState => _cashState;
+  PendingCashSummary? get pendingSummary => _cashState?.pendingSummary;
   List<WashItem> get recentWashes => _recentWashes;
   List<Expense> get todayExpenses => _todayExpenses;
   bool get loading => _loading;
@@ -93,7 +94,12 @@ class HomeProvider extends ChangeNotifier {
     }
 
     try {
-      _recentWashes = await WashesService.getToday();
+      final openSessionId = _cashState?.cashSession?.isOpen == true
+          ? _cashState!.cashSession!.id
+          : null;
+      _recentWashes = openSessionId != null
+          ? await WashesService.getForCashSession(openSessionId)
+          : await WashesService.getToday();
       debugPrint('[HomeProvider] recent washes: ${_recentWashes.length}');
     } catch (_) {
       debugPrint('[HomeProvider] error loading washes (silent)');

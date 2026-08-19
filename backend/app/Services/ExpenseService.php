@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\CashSession;
 use App\Models\Expense;
 use Illuminate\Support\Facades\DB;
 
@@ -21,6 +22,7 @@ class ExpenseService
 
             $expense = Expense::create([
                 'user_id'              => $userId,
+                'cash_session_id'      => CashSession::openSessionIdForUpdate(),
                 'supplier_id'          => $data['supplier_id'],
                 'invoice_number'       => $data['is_internal_invoice'] ? null : $data['invoice_number'],
                 'is_internal_invoice'  => $data['is_internal_invoice'],

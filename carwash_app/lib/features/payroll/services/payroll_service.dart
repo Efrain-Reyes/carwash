@@ -80,6 +80,33 @@ class PayrollService {
     );
   }
 
+  static Future<EmployeeSalary> updateSalary({
+    required int employeeId,
+    required double salary,
+    required String paymentFrequency,
+    required int workDaysPerPeriod,
+    required String effectiveFrom,
+    String? notes,
+  }) async {
+    final payload = <String, dynamic>{
+      'salary': salary,
+      'payment_frequency': paymentFrequency,
+      'work_days_per_period': workDaysPerPeriod,
+      'effective_from': effectiveFrom,
+      if (notes?.isNotEmpty == true) 'notes': notes,
+    };
+    debugPrint('POST salary payload: $payload');
+    final resp = await ApiClient.instance.post(
+      '/employees/$employeeId/salary',
+      data: payload,
+    );
+    debugPrint('POST salary response: ${resp.data}');
+    final d = resp.data;
+    return EmployeeSalary.fromJson(
+      (d['salary'] ?? d['data'] ?? d) as Map<String, dynamic>,
+    );
+  }
+
   static Future<List<EmployeeSalary>> getSalaryHistory(int employeeId) async {
     final resp = await ApiClient.instance.get(
       '/employees/$employeeId/salary-history',
@@ -173,6 +200,29 @@ class PayrollService {
       data: payload,
     );
     debugPrint('POST advance response: ${resp.data}');
+    final d = resp.data;
+    return Advance.fromJson(
+      (d['advance'] ?? d['data'] ?? d) as Map<String, dynamic>,
+    );
+  }
+
+  static Future<Advance> updateAdvance({
+    required int advanceId,
+    double? amount,
+    String? advanceDate,
+    String? notes,
+  }) async {
+    final payload = <String, dynamic>{
+      if (amount != null) 'amount': amount,
+      if (advanceDate != null) 'advance_date': advanceDate,
+      if (notes != null) 'notes': notes,
+    };
+    debugPrint('PUT advance payload: $payload');
+    final resp = await ApiClient.instance.put(
+      '/advances/$advanceId',
+      data: payload,
+    );
+    debugPrint('PUT advance response: ${resp.data}');
     final d = resp.data;
     return Advance.fromJson(
       (d['advance'] ?? d['data'] ?? d) as Map<String, dynamic>,
