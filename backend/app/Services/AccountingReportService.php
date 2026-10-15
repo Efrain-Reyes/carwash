@@ -15,6 +15,9 @@ use Illuminate\Support\Carbon;
 
 class AccountingReportService
 {
+    /** Cuenta solo lavados: los extras (wash_services.kind = 'extra') suman dinero pero no cantidad. */
+    private const WASH_COUNT_SQL = "SUM(CASE WHEN washes.wash_service_id IN (SELECT id FROM wash_services WHERE kind = 'extra') THEN 0 ELSE 1 END)";
+
     private Carbon $from;
 
     private Carbon $to;
@@ -42,7 +45,9 @@ class AccountingReportService
             'caja' => $this->cashSummary($summary['movimiento_neto_efectivo']),
 
             'lavados' => [
+                // Solo lavados; los extras se cuentan aparte pero sí suman a los ingresos.
                 'cantidad' => $this->cantidadLavados(),
+                'extras' => $this->cantidadExtras(),
                 'por_vehiculo' => $this->statsPorVehiculo(),
                 'por_servicio' => $this->statsPorServicio(),
             ],
@@ -135,7 +140,7 @@ class AccountingReportService
         $this->setExactRange($session->opened_at, $to);
 
         $rows = $this->washesQuery()
-            ->selectRaw('DATE(registered_at) as fecha, COUNT(*) as cantidad, SUM(price) as total')
+            ->selectRaw('DATE(registered_at) as fecha, '.self::WASH_COUNT_SQL.' as cantidad, SUM(price) as total')
             ->groupBy('fecha')
             ->orderBy('fecha')
             ->get();
@@ -331,14 +336,19 @@ class AccountingReportService
 
     private function cantidadLavados(): int
     {
-        return $this->washesQuery()->count();
+        return $this->washesQuery()->whereHas('washService', fn ($q) => $q->where('kind', '!=', 'extra'))->count();
+    }
+
+    private function cantidadExtras(): int
+    {
+        return $this->washesQuery()->whereHas('washService', fn ($q) => $q->where('kind', 'extra'))->count();
     }
 
     private function statsPorVehiculo(): array
     {
         return $this->washesQuery()
             ->join('vehicle_types', 'washes.vehicle_type_id', '=', 'vehicle_types.id')
-            ->selectRaw('vehicle_types.name as tipo, COUNT(*) as cantidad, SUM(washes.price) as total')
+            ->selectRaw('vehicle_types.name as tipo, '.self::WASH_COUNT_SQL.' as cantidad, SUM(washes.price) as total')
             ->groupBy('vehicle_types.id', 'vehicle_types.name')
             ->orderByDesc('total')
             ->get()

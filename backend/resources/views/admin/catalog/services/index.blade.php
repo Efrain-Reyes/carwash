@@ -56,64 +56,81 @@
                                 @endforeach
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-line">
-                            @foreach ($serviceTypes as $type)
-                                <tr @class(['bg-surface/50' => ! $type->is_active])>
-                                    <td class="sticky left-0 z-10 bg-white px-4 py-3.5 align-top shadow-[1px_0_0_var(--color-line)] sm:px-5">
-                                        <div @class(['opacity-60' => ! $type->is_active])>
-                                            <p class="font-semibold">{{ $type->name }}</p>
-                                            <div class="mt-1 flex flex-wrap gap-1.5">
-                                                @if ($type->is_custom)
-                                                    <span class="badge bg-warn-bg text-warn-fg">Precio libre</span>
-                                                @endif
-                                                @unless ($type->is_active)
-                                                    <span class="badge bg-bad-bg text-bad-fg">Inactivo</span>
-                                                @endunless
-                                            </div>
-                                        </div>
-                                        <div class="mt-2 flex gap-3 text-xs font-semibold">
-                                            <a href="{{ route('admin.catalog.services.edit', $type) }}" class="text-accent-600 hover:underline">Editar</a>
-                                            {{-- Los formularios no se pueden anidar: el botón apunta a un form fuera de la tabla. --}}
-                                            <button type="submit" form="toggle-service-{{ $type->id }}"
-                                                    onclick="return confirm(@js($type->is_active ? "¿Desactivar «{$type->name}» para todos los vehículos?" : "¿Activar «{$type->name}»?"))"
-                                                    @class(['hover:underline', 'text-bad-fg' => $type->is_active, 'text-ok-fg' => ! $type->is_active])>
-                                                {{ $type->is_active ? 'Desactivar' : 'Activar' }}
-                                            </button>
-                                        </div>
-                                    </td>
-
-                                    @foreach ($vehicleTypes as $vehicle)
-                                        @php
-                                            $cell = $matrix[$type->id][$vehicle->id] ?? null;
-                                            $offered = $cell?->is_active ?? false;
-                                        @endphp
-                                        <td class="px-3 py-3.5 align-top">
-                                            @if ($type->is_custom)
-                                                <input type="hidden" name="offered[{{ $type->id }}][{{ $vehicle->id }}]" value="0">
-                                                <label class="inline-flex items-center gap-2 rounded-xl border border-line px-3 py-2 text-sm">
-                                                    <input type="checkbox" name="offered[{{ $type->id }}][{{ $vehicle->id }}]" value="1" class="size-4 rounded border-line"
-                                                           @checked(old("offered.{$type->id}.{$vehicle->id}", $offered))>
-                                                    Se ofrece
-                                                </label>
-                                            @else
-                                                @php
-                                                    $key = "prices.{$type->id}.{$vehicle->id}";
-                                                    $value = old($key, $offered ? $cell->base_price : '');
-                                                @endphp
-                                                <div class="relative">
-                                                    <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-muted">L</span>
-                                                    <input type="number" name="prices[{{ $type->id }}][{{ $vehicle->id }}]" value="{{ $value }}"
-                                                           min="0" step="0.01" inputmode="decimal"
-                                                           placeholder="{{ $cell && ! $offered && $cell->base_price !== null ? 'antes '.number_format($cell->base_price, 2) : 'No se ofrece' }}"
-                                                           aria-label="Precio de {{ $type->name }} para {{ $vehicle->name }}"
-                                                           @class(['field pl-7 tabular-nums', 'border-bad-fg' => $errors->has($key)])>
-                                                </div>
-                                            @endif
-                                        </td>
-                                    @endforeach
+                        @foreach ($sections as $kind => $types)
+                            <tbody class="divide-y divide-line border-t border-line">
+                                <tr class="bg-surface/60">
+                                    <th colspan="{{ $vehicleTypes->count() + 1 }}" class="px-4 py-2.5 text-left sm:px-5">
+                                        <span class="text-xs font-semibold tracking-wide text-ink uppercase">{{ $kind === 'extra' ? 'Extras' : 'Lavados' }}</span>
+                                        <span class="ml-2 text-xs font-normal text-muted">
+                                            {{ $kind === 'extra' ? 'Se agregan al lavado o se cobran solos. No cuentan como lavados.' : 'Se elige uno por vehículo.' }}
+                                        </span>
+                                    </th>
                                 </tr>
-                            @endforeach
-                        </tbody>
+                                @forelse ($types as $type)
+                                    <tr @class(['bg-surface/50' => ! $type->is_active])>
+                                        <td class="sticky left-0 z-10 bg-white px-4 py-3.5 align-top shadow-[1px_0_0_var(--color-line)] sm:px-5">
+                                            <div @class(['opacity-60' => ! $type->is_active])>
+                                                <p class="font-semibold">{{ $type->name }}</p>
+                                                <div class="mt-1 flex flex-wrap gap-1.5">
+                                                    @if ($type->is_custom)
+                                                        <span class="badge bg-warn-bg text-warn-fg">Precio libre</span>
+                                                    @endif
+                                                    @unless ($type->is_active)
+                                                        <span class="badge bg-bad-bg text-bad-fg">Inactivo</span>
+                                                    @endunless
+                                                </div>
+                                            </div>
+                                            <div class="mt-2 flex gap-3 text-xs font-semibold">
+                                                <a href="{{ route('admin.catalog.services.edit', $type) }}" class="text-accent-600 hover:underline">Editar</a>
+                                                {{-- Los formularios no se pueden anidar: el botón apunta a un form fuera de la tabla. --}}
+                                                <button type="submit" form="toggle-service-{{ $type->id }}"
+                                                        onclick="return confirm(@js($type->is_active ? "¿Desactivar «{$type->name}» para todos los vehículos?" : "¿Activar «{$type->name}»?"))"
+                                                        @class(['hover:underline', 'text-bad-fg' => $type->is_active, 'text-ok-fg' => ! $type->is_active])>
+                                                    {{ $type->is_active ? 'Desactivar' : 'Activar' }}
+                                                </button>
+                                            </div>
+                                        </td>
+
+                                        @foreach ($vehicleTypes as $vehicle)
+                                            @php
+                                                $cell = $matrix[$type->id][$vehicle->id] ?? null;
+                                                $offered = $cell?->is_active ?? false;
+                                            @endphp
+                                            <td class="px-3 py-3.5 align-top">
+                                                @if ($type->is_custom)
+                                                    <input type="hidden" name="offered[{{ $type->id }}][{{ $vehicle->id }}]" value="0">
+                                                    <label class="inline-flex items-center gap-2 rounded-xl border border-line px-3 py-2 text-sm">
+                                                        <input type="checkbox" name="offered[{{ $type->id }}][{{ $vehicle->id }}]" value="1" class="size-4 rounded border-line"
+                                                               @checked(old("offered.{$type->id}.{$vehicle->id}", $offered))>
+                                                        Se ofrece
+                                                    </label>
+                                                @else
+                                                    @php
+                                                        $key = "prices.{$type->id}.{$vehicle->id}";
+                                                        $value = old($key, $offered ? $cell->base_price : '');
+                                                    @endphp
+                                                    <div class="relative">
+                                                        <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-muted">L</span>
+                                                        <input type="number" name="prices[{{ $type->id }}][{{ $vehicle->id }}]" value="{{ $value }}"
+                                                               min="0" step="0.01" inputmode="decimal"
+                                                               placeholder="{{ $cell && ! $offered && $cell->base_price !== null ? 'antes '.number_format($cell->base_price, 2) : 'No se ofrece' }}"
+                                                               aria-label="Precio de {{ $type->name }} para {{ $vehicle->name }}"
+                                                               @class(['field pl-7 tabular-nums', 'border-bad-fg' => $errors->has($key)])>
+                                                    </div>
+                                                @endif
+                                            </td>
+                                        @endforeach
+                                    </tr>
+                                @empty
+                                    <tr>
+                                        <td colspan="{{ $vehicleTypes->count() + 1 }}" class="px-5 py-4 text-sm text-muted">
+                                            {{ $kind === 'extra' ? 'Todavía no hay extras.' : 'Todavía no hay lavados.' }}
+                                            <a href="{{ route('admin.catalog.services.create', ['tipo' => $kind]) }}" class="font-semibold text-accent-600 hover:underline">Crear {{ $kind === 'extra' ? 'un extra' : 'un lavado' }}</a>
+                                        </td>
+                                    </tr>
+                                @endforelse
+                            </tbody>
+                        @endforeach
                     </table>
                 </div>
 

@@ -93,6 +93,8 @@ class AuditLog extends Model
         'rol'                        => 'Rol',
         'is_active'                  => 'Activo',
         'icon'                       => 'Icono',
+        'kind'                       => 'Tipo de servicio',
+        'group_uuid'                 => 'Registro conjunto',
         'sort_order'                 => 'Orden',
         'wash_service_type_id'       => 'Servicio',
         'expense_category_id'        => 'Categoría',

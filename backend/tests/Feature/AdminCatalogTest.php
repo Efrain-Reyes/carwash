@@ -141,7 +141,7 @@ class AdminCatalogTest extends TestCase
     public function test_admin_creates_a_service_and_renaming_it_updates_every_vehicle(): void
     {
         $this->actingAs($this->admin)
-            ->post(route('admin.catalog.services.store'), ['name' => 'Encerado', 'is_custom' => '0', 'sort_order' => 4])
+            ->post(route('admin.catalog.services.store'), ['name' => 'Encerado', 'kind' => 'lavado', 'is_custom' => '0', 'sort_order' => 4])
             ->assertRedirect(route('admin.catalog.services.index'));
 
         $type = $this->type('Encerado');
@@ -155,7 +155,7 @@ class AdminCatalogTest extends TestCase
         $this->assertSame(3, $type->prices()->where('is_active', true)->count());
 
         $this->actingAs($this->admin)
-            ->put(route('admin.catalog.services.update', $type), ['name' => 'Encerado premium', 'sort_order' => 4])
+            ->put(route('admin.catalog.services.update', $type), ['name' => 'Encerado premium', 'kind' => 'lavado', 'sort_order' => 4])
             ->assertRedirect();
 
         $this->assertSame(3, WashService::where('name', 'Encerado premium')->count());
@@ -165,7 +165,7 @@ class AdminCatalogTest extends TestCase
     public function test_service_names_must_be_unique(): void
     {
         $this->actingAs($this->admin)
-            ->post(route('admin.catalog.services.store'), ['name' => 'lavado general'])
+            ->post(route('admin.catalog.services.store'), ['name' => 'lavado general', 'kind' => 'lavado'])
             ->assertSessionHasErrors(['name' => 'Ya existe un registro con ese nombre.']);
     }
 

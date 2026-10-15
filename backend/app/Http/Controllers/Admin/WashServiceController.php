@@ -10,6 +10,7 @@ use App\Models\WashServiceType;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 /** Catálogo de servicios y matriz de precios (servicio × tipo de vehículo). */
@@ -22,12 +23,16 @@ class WashServiceController extends Controller
         $vehicleTypes = VehicleType::ordered()->get();
         $serviceTypes = WashServiceType::ordered()->with('prices')->get();
 
+        // Primero los lavados, luego los extras.
+        $sections = collect(WashServiceType::KINDS)
+            ->map(fn (string $label, string $kind) => $serviceTypes->where('kind', $kind)->values());
+
         // $matrix[servicio][vehículo] = WashService (o null si nunca se ha ofrecido)
         $matrix = $serviceTypes->mapWithKeys(fn (WashServiceType $type) => [
             $type->id => $type->prices->keyBy('vehicle_type_id'),
         ]);
 
-        return view('admin.catalog.services.index', compact('vehicleTypes', 'serviceTypes', 'matrix'));
+        return view('admin.catalog.services.index', compact('vehicleTypes', 'serviceTypes', 'sections', 'matrix'));
     }
 
     /**
@@ -99,7 +104,10 @@ class WashServiceController extends Controller
 
     public function create(): View
     {
-        $serviceType = new WashServiceType(['sort_order' => (int) WashServiceType::max('sort_order') + 1]);
+        $serviceType = new WashServiceType([
+            'kind'       => request()->query('tipo') === 'extra' ? 'extra' : 'lavado',
+            'sort_order' => (int) WashServiceType::max('sort_order') + 1,
+        ]);
 
         return view('admin.catalog.services.form', compact('serviceType'));
     }
@@ -145,11 +153,13 @@ class WashServiceController extends Controller
     {
         $data = $this->validateForm($request, [
             'name'       => ['required', 'string', 'max:100', $this->uniqueName('wash_service_types', $serviceType?->id)],
+            'kind'       => ['required', Rule::in(array_keys(WashServiceType::KINDS))],
             'sort_order' => 'nullable|integer|min:0|max:999',
-        ], ['name' => 'nombre', 'sort_order' => 'orden']);
+        ], ['name' => 'nombre', 'kind' => 'tipo de servicio', 'sort_order' => 'orden']);
 
         return [
             'name'       => trim($data['name']),
+            'kind'       => $data['kind'],
             'sort_order' => $data['sort_order'] ?? 0,
         ];
     }

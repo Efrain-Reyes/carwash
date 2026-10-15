@@ -6,11 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\StoreWashRequest;
 use App\Models\CashSession;
 use App\Models\Wash;
-use App\Models\WashService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class WashController extends Controller
 {
@@ -63,46 +63,48 @@ class WashController extends Controller
 
     public function store(StoreWashRequest $request): JsonResponse
     {
-        $service = WashService::findOrFail($request->wash_service_id);
-
-        if ($service->is_custom) {
-            $price              = $request->price;
-            $customDescription  = $request->custom_description;
-        } else {
-            // El precio siempre viene del catálogo; se ignora cualquier price del request
-            if (is_null($service->base_price)) {
-                return response()->json([
-                    'message' => 'El servicio "' . $service->name . '" no tiene precio configurado. Configúralo en el catálogo antes de registrar lavados.',
-                ], 422);
-            }
-
-            $price             = $service->base_price;
-            $customDescription = null;
-        }
+        $services = $request->services();
 
         $registeredAt = $request->filled('registered_at')
             ? Carbon::parse($request->registered_at, config('app.timezone'))
             : now();
 
-        $wash = DB::transaction(function () use ($request, $customDescription, $price, $registeredAt) {
-            $wash = Wash::create([
-                'user_id'            => $request->user()->id,
-                'cash_session_id'    => CashSession::openSessionIdForUpdate(),
-                'vehicle_type_id'    => $request->vehicle_type_id,
-                'wash_service_id'    => $request->wash_service_id,
-                'custom_description' => $customDescription,
-                'price'              => $price,
-                'status'             => 'completado',
-                'notes'              => $request->notes,
-                'registered_at'      => $registeredAt,
-            ]);
+        // Lo que se registra junto (un lavado y sus extras) comparte group_uuid y caja.
+        $groupUuid = (string) Str::uuid();
 
-            return $wash;
+        $washes = DB::transaction(function () use ($request, $services, $registeredAt, $groupUuid) {
+            $cashSessionId = CashSession::openSessionIdForUpdate();
+
+            return collect($request->input('items'))->map(function (array $item) use ($request, $services, $registeredAt, $groupUuid, $cashSessionId) {
+                $service = $services->get((int) $item['wash_service_id']);
+
+                return Wash::create([
+                    'group_uuid'         => $groupUuid,
+                    'user_id'            => $request->user()->id,
+                    'cash_session_id'    => $cashSessionId,
+                    'vehicle_type_id'    => $request->vehicle_type_id,
+                    'wash_service_id'    => $service->id,
+                    // Precio libre ("Otro"): lo escribe el operador. Si no, siempre el del catálogo.
+                    'custom_description' => $service->is_custom ? trim($item['custom_description']) : null,
+                    'price'              => $service->is_custom ? $item['price'] : $service->base_price,
+                    'status'             => 'completado',
+                    'notes'              => $request->notes,
+                    'registered_at'      => $registeredAt,
+                ]);
+            });
         });
 
-        $wash->load(['vehicleType', 'washService', 'user:id,name']);
+        $washes->each->load(['vehicleType', 'washService', 'user:id,name']);
 
-        return response()->json($wash, 201);
+        // La APK vieja espera el lavado suelto.
+        if ($request->isLegacy()) {
+            return response()->json($washes->first(), 201);
+        }
+
+        return response()->json([
+            'washes' => $washes,
+            'total'  => round($washes->sum(fn (Wash $wash) => (float) $wash->price), 2),
+        ], 201);
     }
 
     public function show(Wash $wash): JsonResponse

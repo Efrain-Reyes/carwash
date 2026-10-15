@@ -15,14 +15,21 @@ class WashServiceType extends Model
 {
     use Auditable;
 
+    public const KINDS = [
+        'lavado' => 'Lavado',
+        'extra'  => 'Extra',
+    ];
+
     protected $fillable = [
         'name',
+        'kind',
         'is_custom',
         'is_active',
         'sort_order',
     ];
 
     protected $attributes = [
+        'kind'       => 'lavado',
         'is_custom'  => false,
         'is_active'  => true,
         'sort_order' => 0,
@@ -39,15 +46,20 @@ class WashServiceType extends Model
 
     protected static function booted(): void
     {
-        // Las filas de precio guardan una copia del nombre (la app y los reportes la leen de ahí).
+        // Las filas de precio guardan una copia del nombre y del tipo (la app y los reportes la leen de ahí).
         static::updated(function (WashServiceType $type) {
-            if ($type->wasChanged('name')) {
-                $type->prices->each->update(['name' => $type->name]);
+            if ($type->wasChanged(['name', 'kind'])) {
+                $type->prices->each->update(['name' => $type->name, 'kind' => $type->kind]);
             }
         });
     }
 
     /** Busca el servicio por nombre (sin importar mayúsculas) o lo crea al final de la lista. */
+    public function isExtra(): bool
+    {
+        return $this->kind === 'extra';
+    }
+
     public static function findOrCreateByName(string $name, bool $isCustom = false): self
     {
         $name = trim($name);

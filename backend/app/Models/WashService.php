@@ -19,6 +19,7 @@ class WashService extends Model
         'wash_service_type_id',
         'vehicle_type_id',
         'name',
+        'kind',
         'base_price',
         'is_custom',
         'is_active',
@@ -40,7 +41,17 @@ class WashService extends Model
             if ($service->wash_service_type_id === null && $service->name) {
                 $service->wash_service_type_id = WashServiceType::findOrCreateByName($service->name, (bool) $service->is_custom)->id;
             }
+
+            // El tipo (lavado o extra) siempre es el del servicio del catálogo.
+            if ($type = WashServiceType::find($service->wash_service_type_id)) {
+                $service->kind = $type->kind;
+            }
         });
+    }
+
+    public function isExtra(): bool
+    {
+        return $this->kind === 'extra';
     }
 
     public function serviceType(): BelongsTo

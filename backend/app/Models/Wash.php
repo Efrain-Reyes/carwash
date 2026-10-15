@@ -11,6 +11,7 @@ class Wash extends Model
     use Auditable;
 
     protected $fillable = [
+        'group_uuid',
         'user_id',
         'cash_session_id',
         'excluded_from_cash_session',

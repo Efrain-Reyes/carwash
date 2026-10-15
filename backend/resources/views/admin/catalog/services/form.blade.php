@@ -23,6 +23,28 @@
         </div>
 
         <fieldset>
+            <legend class="field-label">Tipo de servicio</legend>
+            @php $kind = old('kind', $serviceType->kind ?? 'lavado'); @endphp
+            <div class="grid gap-3 sm:grid-cols-2">
+                <label class="flex cursor-pointer gap-3 rounded-xl border border-line p-4 has-checked:border-accent-500 has-checked:bg-info-bg/50">
+                    <input type="radio" name="kind" value="lavado" class="mt-0.5" @checked($kind === 'lavado')>
+                    <span>
+                        <span class="block text-sm font-semibold">Lavado</span>
+                        <span class="block text-xs text-muted">Express, Completo, Premium… Se elige uno por vehículo y cuenta como lavado.</span>
+                    </span>
+                </label>
+                <label class="flex cursor-pointer gap-3 rounded-xl border border-line p-4 has-checked:border-accent-500 has-checked:bg-info-bg/50">
+                    <input type="radio" name="kind" value="extra" class="mt-0.5" @checked($kind === 'extra')>
+                    <span>
+                        <span class="block text-sm font-semibold">Extra</span>
+                        <span class="block text-xs text-muted">Cristal perfecto, calibración… Se agrega al lavado o se cobra solo. No cuenta como lavado.</span>
+                    </span>
+                </label>
+            </div>
+            @error('kind') <p class="field-error">{{ $message }}</p> @enderror
+        </fieldset>
+
+        <fieldset>
             <legend class="field-label">¿Cómo se cobra?</legend>
             @if ($editing)
                 <p class="rounded-xl bg-surface px-4 py-3 text-sm">

@@ -12,8 +12,8 @@
         $monthName = now()->locale('es')->isoFormat('MMMM');
 
         $stats = [
-            ['label' => 'Lavados hoy', 'value' => $todayReport['lavados']['cantidad'], 'hint' => Format::money($today['ingresos_lavados']).' en ingresos'],
-            ['label' => "Ingresos de {$monthName}", 'value' => Format::money($month['ingresos_lavados']), 'hint' => $monthReport['lavados']['cantidad'].' lavados'],
+            ['label' => 'Lavados hoy', 'value' => $todayReport['lavados']['cantidad'], 'hint' => trans_choice('{0} sin extras|{1} + 1 extra|[2,*] + :count extras', $todayReport['lavados']['extras']).' · '.Format::money($today['ingresos_lavados'])],
+            ['label' => "Ingresos de {$monthName}", 'value' => Format::money($month['ingresos_lavados']), 'hint' => $monthReport['lavados']['cantidad'].' lavados y '.$monthReport['lavados']['extras'].' extras'],
             ['label' => "Gastos de {$monthName}", 'value' => Format::money($month['total_gastos']), 'hint' => 'Sin contar sueldos'],
             ['label' => "Utilidad de {$monthName}", 'value' => Format::money($month['utilidad_operativa']), 'hint' => 'Ingresos − gastos − sueldos', 'tone' => $month['utilidad_operativa'] < 0 ? 'bad' : 'ok'],
         ];
