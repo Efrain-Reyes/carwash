@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\VehicleType;
+use App\Models\WashServiceType;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class VehicleTypeController extends Controller
 {
@@ -19,12 +21,16 @@ class VehicleTypeController extends Controller
 
         $types = VehicleType::with(['washServices' => function ($query) use ($showAll) {
             if (! $showAll) {
-                $query->where('is_active', true);
+                // Un precio se ofrece si la fila está activa y el servicio del catálogo también.
+                $query->where('is_active', true)
+                    ->whereHas('serviceType', fn ($q) => $q->where('is_active', true));
             }
-            $query->orderBy('id');
+            $query->orderBy(
+                WashServiceType::select('sort_order')->whereColumn('wash_service_types.id', 'wash_services.wash_service_type_id')
+            )->orderBy('id');
         }])
             ->when(! $showAll, fn ($query) => $query->where('is_active', true))
-            ->orderBy('id')
+            ->ordered()
             ->get();
 
         return response()->json($types);
@@ -34,14 +40,16 @@ class VehicleTypeController extends Controller
     {
         $data = $request->validate([
             'name' => 'required|string|max:100',
+            'icon' => ['sometimes', Rule::in(array_keys(VehicleType::ICONS))],
         ]);
 
         $vehicleType = VehicleType::create([
             ...$data,
-            'is_active' => true,
+            'sort_order' => (int) VehicleType::max('sort_order') + 1,
+            'is_active'  => true,
         ]);
 
-        return response()->json($vehicleType, 201);
+        return response()->json($vehicleType->refresh(), 201);
     }
 
     public function toggle(VehicleType $vehicleType): JsonResponse

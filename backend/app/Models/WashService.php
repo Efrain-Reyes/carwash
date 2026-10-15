@@ -7,11 +7,16 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * Un servicio del catálogo ofrecido para un tipo de vehículo, con su precio
+ * (una celda de la matriz de precios). Los lavados apuntan a esta fila.
+ */
 class WashService extends Model
 {
     use Auditable;
 
     protected $fillable = [
+        'wash_service_type_id',
         'vehicle_type_id',
         'name',
         'base_price',
@@ -26,6 +31,21 @@ class WashService extends Model
             'is_custom'  => 'boolean',
             'is_active'  => 'boolean',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        // Todo precio pertenece a un servicio del catálogo, aunque se cree sin indicarlo.
+        static::creating(function (WashService $service) {
+            if ($service->wash_service_type_id === null && $service->name) {
+                $service->wash_service_type_id = WashServiceType::findOrCreateByName($service->name, (bool) $service->is_custom)->id;
+            }
+        });
+    }
+
+    public function serviceType(): BelongsTo
+    {
+        return $this->belongsTo(WashServiceType::class, 'wash_service_type_id');
     }
 
     public function vehicleType(): BelongsTo

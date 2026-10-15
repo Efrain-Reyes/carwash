@@ -42,6 +42,16 @@ class StoreWashRequest extends FormRequest
                     'wash_service_id',
                     'El servicio no corresponde al tipo de vehículo seleccionado.'
                 );
+
+                return;
+            }
+
+            // Desactivado desde el catálogo (el precio para ese vehículo o el servicio completo).
+            if (! $service->is_active || $service->serviceType?->is_active === false) {
+                $validator->errors()->add(
+                    'wash_service_id',
+                    'Este servicio ya no está disponible. Actualiza la pantalla e intenta de nuevo.'
+                );
             }
         });
     }

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\Auditable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ExpenseCatalogItem extends Model
@@ -12,7 +13,7 @@ class ExpenseCatalogItem extends Model
 
     protected $fillable = [
         'name',
-        'type',
+        'expense_category_id',
         'base_price',
         'tax_rate',
         'is_active',
@@ -25,6 +26,11 @@ class ExpenseCatalogItem extends Model
             'tax_rate'   => 'decimal:2',
             'is_active'  => 'boolean',
         ];
+    }
+
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(ExpenseCategory::class, 'expense_category_id');
     }
 
     public function expenseItems(): HasMany

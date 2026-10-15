@@ -9,10 +9,17 @@ class VehicleTypeSeeder extends Seeder
 {
     public function run(): void
     {
-        $types = ['Carro', 'Moto', 'Camión'];
+        $types = [
+            ['name' => 'Carro', 'icon' => 'car'],
+            ['name' => 'Moto', 'icon' => 'motorcycle'],
+            ['name' => 'Camión', 'icon' => 'truck'],
+        ];
 
-        foreach ($types as $name) {
-            VehicleType::firstOrCreate(['name' => $name]);
+        foreach ($types as $index => $type) {
+            VehicleType::firstOrCreate(['name' => $type['name']], [
+                'icon'       => $type['icon'],
+                'sort_order' => $index + 1,
+            ]);
         }
     }
 }

@@ -15,6 +15,13 @@
     @php
         $nav = [
             ['route' => 'admin.dashboard', 'match' => 'admin.dashboard', 'label' => 'Inicio', 'icon' => 'home'],
+            ['heading' => 'Catálogos'],
+            ['route' => 'admin.catalog.services.index', 'match' => 'admin.catalog.services.*', 'label' => 'Servicios y precios', 'icon' => 'tag'],
+            ['route' => 'admin.catalog.vehicles.index', 'match' => 'admin.catalog.vehicles.*', 'label' => 'Tipos de vehículo', 'icon' => 'truck'],
+            ['route' => 'admin.catalog.suppliers.index', 'match' => 'admin.catalog.suppliers.*', 'label' => 'Proveedores', 'icon' => 'store'],
+            ['route' => 'admin.catalog.expense-items.index', 'match' => 'admin.catalog.expense-items.*', 'label' => 'Artículos de gastos', 'icon' => 'cube'],
+            ['route' => 'admin.catalog.expense-categories.index', 'match' => 'admin.catalog.expense-categories.*', 'label' => 'Categorías de gastos', 'icon' => 'folder'],
+            ['heading' => 'Administración'],
             ['route' => 'admin.users.index', 'match' => 'admin.users.*', 'label' => 'Usuarios', 'icon' => 'users'],
             ['route' => 'admin.audit.index', 'match' => 'admin.audit.*', 'label' => 'Bitácora', 'icon' => 'log'],
         ];
@@ -34,8 +41,12 @@
             </button>
         </div>
 
-        <nav class="mt-4 flex-1 space-y-1 px-3">
+        <nav class="mt-2 flex-1 space-y-1 overflow-y-auto px-3 pb-4">
             @foreach ($nav as $item)
+                @if (isset($item['heading']))
+                    <p class="px-3 pt-5 pb-1 text-[11px] font-semibold tracking-wider text-white/40 uppercase">{{ $item['heading'] }}</p>
+                    @continue
+                @endif
                 @php $active = request()->routeIs($item['match']); @endphp
                 <a href="{{ route($item['route']) }}"
                    @class([

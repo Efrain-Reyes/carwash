@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\VehicleType;
 use App\Models\WashService;
+use App\Models\WashServiceType;
 use Illuminate\Database\Seeder;
 
 class WashServiceSeeder extends Seeder
@@ -32,12 +33,15 @@ class WashServiceSeeder extends Seeder
 
             foreach ($list as $service) {
                 // updateOrCreate para que al re-ejecutar el seeder actualice los precios
+                $serviceType = WashServiceType::findOrCreateByName($service['name'], $service['is_custom']);
+
                 WashService::updateOrCreate(
                     [
-                        'vehicle_type_id' => $vehicleType->id,
-                        'name'            => $service['name'],
+                        'wash_service_type_id' => $serviceType->id,
+                        'vehicle_type_id'      => $vehicleType->id,
                     ],
                     [
+                        'name'       => $serviceType->name,
                         'base_price' => $service['base_price'],
                         'is_custom'  => $service['is_custom'],
                         'is_active'  => true,
