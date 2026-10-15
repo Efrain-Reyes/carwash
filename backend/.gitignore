@@ -14,7 +14,6 @@
 /.zed
 /auth.json
 /node_modules
-/public/build
 /public/hot
 /public/storage
 /storage/*.key
@@ -24,3 +23,6 @@ _ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# public/build sí se sube al repo: la VPS no tiene Node, así que los estilos
+# del panel se compilan en local con `npm run build` antes de hacer commit.

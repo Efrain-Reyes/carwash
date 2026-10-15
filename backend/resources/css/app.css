@@ -1,11 +1,75 @@
 @import 'tailwindcss';
 
-@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 @source '../**/*.blade.php';
 @source '../**/*.js';
 
+/* Mismos colores que la app móvil (carwash_app/lib/core/constants/app_colors.dart). */
 @theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-        'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji';
+
+    --color-brand-950: #091D38;
+    --color-brand-900: #0B2545;
+    --color-brand-800: #16365F;
+    --color-accent-500: #2EA8E0;
+    --color-accent-600: #1C8FC5;
+
+    --color-surface: #F5F8FC;
+    --color-surface-2: #EEF2F7;
+    --color-line: #E2E8EF;
+    --color-ink: #0E1B2C;
+    --color-muted: #6B7A8E;
+    --color-muted-2: #A8B3C2;
+
+    --color-ok-bg: #E5F5EC;
+    --color-ok-fg: #0F7A4D;
+    --color-bad-bg: #FCE9E9;
+    --color-bad-fg: #B83C3C;
+    --color-warn-bg: #FFF4DB;
+    --color-warn-fg: #8A5A00;
+    --color-info-bg: #E2F1FB;
+    --color-info-fg: #0E5C8A;
+}
+
+[x-cloak] {
+    display: none !important;
+}
+
+@layer components {
+    .card {
+        @apply rounded-2xl border border-line bg-white shadow-[0_6px_18px_rgba(11,37,69,0.05)];
+    }
+
+    .btn {
+        @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 disabled:opacity-50;
+    }
+
+    /* Se usan junto con .btn: class="btn btn-primary" */
+    .btn-primary {
+        @apply bg-brand-900 text-white hover:bg-brand-800;
+    }
+
+    .btn-secondary {
+        @apply border border-line bg-white text-ink hover:bg-surface-2;
+    }
+
+    .btn-danger {
+        @apply border border-bad-bg bg-bad-bg text-bad-fg hover:border-bad-fg/30;
+    }
+
+    .field-label {
+        @apply mb-1.5 block text-sm font-semibold text-ink;
+    }
+
+    .field {
+        @apply block w-full rounded-xl border border-line bg-white px-3.5 py-2.5 text-sm text-ink placeholder:text-muted-2 focus:border-accent-500 focus:ring-2 focus:ring-accent-500/20 focus:outline-none;
+    }
+
+    .field-error {
+        @apply mt-1.5 text-sm text-bad-fg;
+    }
+
+    .badge {
+        @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap;
+    }
 }

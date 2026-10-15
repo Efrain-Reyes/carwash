@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Services\AuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -31,6 +32,8 @@ class AuthController extends Controller
                 'email' => ['Esta cuenta está desactivada.'],
             ]);
         }
+
+        AuditLogger::record('login', $user);
 
         $token = $user->createToken('mobile')->plainTextToken;
 
