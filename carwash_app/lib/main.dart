@@ -27,7 +27,7 @@ class CarwashApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'Carwash',
+      title: 'Jin Carwash',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       routerConfig: router,
