@@ -61,9 +61,14 @@ return new class extends Migration
 
     public function down(): void
     {
+        // Primero la llave foránea: MySQL la apoya en el índice único y no deja borrarlo antes.
+        Schema::table('wash_services', function (Blueprint $table) {
+            $table->dropForeign(['wash_service_type_id']);
+        });
+
         Schema::table('wash_services', function (Blueprint $table) {
             $table->dropUnique(['wash_service_type_id', 'vehicle_type_id']);
-            $table->dropConstrainedForeignId('wash_service_type_id');
+            $table->dropColumn('wash_service_type_id');
         });
 
         Schema::dropIfExists('wash_service_types');
