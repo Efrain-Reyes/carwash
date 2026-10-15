@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/utils/vehicle_icons.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_text_field.dart';
@@ -161,13 +162,22 @@ class _VehicleRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        for (int i = 0; i < types.length; i++) ...[
-          if (i > 0) const SizedBox(width: 10),
-          Expanded(child: _VehicleCard(type: types[i])),
-        ],
-      ],
+    // Hasta 3 por fila; con más tipos de vehículo se acomodan en varias filas.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const spacing = 10.0;
+        final perRow = types.length.clamp(1, 3);
+        final width = (constraints.maxWidth - spacing * (perRow - 1)) / perRow;
+
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: [
+            for (final type in types)
+              SizedBox(width: width, child: _VehicleCard(type: type)),
+          ],
+        );
+      },
     );
   }
 }
@@ -175,15 +185,6 @@ class _VehicleRow extends StatelessWidget {
 class _VehicleCard extends StatelessWidget {
   const _VehicleCard({required this.type});
   final VehicleType type;
-
-  static IconData _iconFor(String name) {
-    final n = name.toLowerCase();
-    if (n.contains('moto')) return Icons.two_wheeler_rounded;
-    if (n.contains('camio') || n.contains('truck')) {
-      return Icons.local_shipping_rounded;
-    }
-    return Icons.directions_car_rounded;
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -223,7 +224,7 @@ class _VehicleCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              _iconFor(type.name),
+              vehicleIcon(type.icon, name: type.name),
               size: 28,
               color: selected ? Colors.white : AppColors.primary,
             ),
@@ -236,6 +237,8 @@ class _VehicleCard extends StatelessWidget {
                 color: selected ? Colors.white : AppColors.textPrimary,
               ),
               textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),

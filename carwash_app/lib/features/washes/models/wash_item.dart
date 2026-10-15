@@ -1,6 +1,7 @@
 class WashItem {
   final int id;
   final String vehicleTypeName;
+  final String? vehicleTypeIcon;
   final String serviceName;
   final String? customDescription;
   final double price;
@@ -12,6 +13,7 @@ class WashItem {
   const WashItem({
     required this.id,
     required this.vehicleTypeName,
+    this.vehicleTypeIcon,
     required this.serviceName,
     this.customDescription,
     required this.price,
@@ -25,6 +27,7 @@ class WashItem {
     return WashItem(
       id:               json['id'] as int,
       vehicleTypeName:  (json['vehicle_type'] as Map?)?['name']?.toString() ?? '',
+      vehicleTypeIcon:  (json['vehicle_type'] as Map?)?['icon']?.toString(),
       serviceName:      (json['wash_service'] as Map?)?['name']?.toString() ?? '',
       customDescription: json['custom_description'] as String?,
       price:            double.parse(json['price'].toString()),

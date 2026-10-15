@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/utils/vehicle_icons.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/status_badge.dart';
@@ -281,13 +282,6 @@ class _WashCard extends StatelessWidget {
   final WashItem wash;
   final VoidCallback onTap;
 
-  static IconData _iconFor(String vehicleType) {
-    final n = vehicleType.toLowerCase();
-    if (n.contains('moto')) return Icons.two_wheeler_rounded;
-    if (n.contains('camio')) return Icons.local_shipping_rounded;
-    return Icons.directions_car_rounded;
-  }
-
   @override
   Widget build(BuildContext context) {
     final anulado = wash.isAnulado;
@@ -305,7 +299,7 @@ class _WashCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
-              _iconFor(wash.vehicleTypeName),
+              vehicleIcon(wash.vehicleTypeIcon, name: wash.vehicleTypeName),
               size: 20,
               color: anulado ? AppColors.errorFg : AppColors.accent,
             ),
