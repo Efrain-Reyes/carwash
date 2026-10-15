@@ -71,22 +71,18 @@ class WashesService {
         .toList();
   }
 
-  static Future<void> createWash({
+  /// Registra uno o varios servicios para el mismo vehículo: como máximo un
+  /// lavado y los extras que se quieran (o solo extras).
+  static Future<void> createWashes({
     required int vehicleTypeId,
-    required int washServiceId,
-    String? customDescription,
-    double? price,
+    required List<WashItemRequest> items,
     String? notes,
     DateTime? registeredAt,
   }) async {
     final body = <String, dynamic>{
       'vehicle_type_id': vehicleTypeId,
-      'wash_service_id': washServiceId,
+      'items': items.map((i) => i.toJson()).toList(),
     };
-    if (customDescription != null) {
-      body['custom_description'] = customDescription;
-    }
-    if (price != null) body['price'] = price;
     if (notes != null) body['notes'] = notes;
     if (registeredAt != null) {
       body['registered_at'] = _dateTimeApi(registeredAt);
@@ -137,4 +133,23 @@ class WashesService {
       '${date.hour.toString().padLeft(2, '0')}:'
       '${date.minute.toString().padLeft(2, '0')}:'
       '${date.second.toString().padLeft(2, '0')}';
+}
+
+/// Un servicio dentro de un registro. Precio y descripción solo para los de precio libre.
+class WashItemRequest {
+  const WashItemRequest({
+    required this.washServiceId,
+    this.price,
+    this.customDescription,
+  });
+
+  final int washServiceId;
+  final double? price;
+  final String? customDescription;
+
+  Map<String, dynamic> toJson() => {
+    'wash_service_id': washServiceId,
+    if (price != null) 'price': price,
+    if (customDescription != null) 'custom_description': customDescription,
+  };
 }

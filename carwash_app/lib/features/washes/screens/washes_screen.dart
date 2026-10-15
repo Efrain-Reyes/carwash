@@ -65,9 +65,9 @@ class _WashesBodyState extends State<_WashesBody> {
       body: Column(
         children: [
           _Header(
-            total:           vm.total,
-            ingresos:        vm.totalIngresos,
-            onRegisterWash:  _goToRegisterWash,
+            total: vm.total,
+            ingresos: vm.totalIngresos,
+            onRegisterWash: _goToRegisterWash,
           ),
           const _Filters(),
           Expanded(child: _buildContent(context, vm)),
@@ -97,10 +97,7 @@ class _WashesBodyState extends State<_WashesBody> {
         separatorBuilder: (_, _) => const SizedBox(height: 8),
         itemBuilder: (_, i) {
           final wash = vm.washes[i];
-          return _WashCard(
-            wash: wash,
-            onTap: () => _showDetail(context, wash),
-          );
+          return _WashCard(wash: wash, onTap: () => _showDetail(context, wash));
         },
       ),
     );
@@ -159,7 +156,10 @@ class _Header extends StatelessWidget {
               GestureDetector(
                 onTap: onRegisterWash,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.accent,
                     borderRadius: BorderRadius.circular(12),
@@ -167,7 +167,11 @@ class _Header extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.add_rounded, color: Colors.white, size: 16),
+                      const Icon(
+                        Icons.add_rounded,
+                        color: Colors.white,
+                        size: 16,
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         'Registrar',
@@ -208,13 +212,17 @@ class _Filters extends StatelessWidget {
             _FilterChip(
               label: 'Hoy',
               active: vm.dateFilter == WashDateFilter.today,
-              onTap: () => context.read<WashesProvider>().setDateFilter(WashDateFilter.today),
+              onTap: () => context.read<WashesProvider>().setDateFilter(
+                WashDateFilter.today,
+              ),
             ),
             const SizedBox(width: 8),
             _FilterChip(
               label: 'Todos',
               active: vm.dateFilter == WashDateFilter.all,
-              onTap: () => context.read<WashesProvider>().setDateFilter(WashDateFilter.all),
+              onTap: () => context.read<WashesProvider>().setDateFilter(
+                WashDateFilter.all,
+              ),
             ),
             const SizedBox(width: 16),
             _FilterChip(
@@ -295,7 +303,9 @@ class _WashCard extends StatelessWidget {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: anulado ? AppColors.errorBg : AppColors.accent.withAlpha(15),
+              color: anulado
+                  ? AppColors.errorBg
+                  : AppColors.accent.withAlpha(15),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
@@ -314,7 +324,9 @@ class _WashCard extends StatelessWidget {
                   style: GoogleFonts.inter(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
-                    color: anulado ? AppColors.textMuted : AppColors.textPrimary,
+                    color: anulado
+                        ? AppColors.textMuted
+                        : AppColors.textPrimary,
                     decoration: anulado ? TextDecoration.lineThrough : null,
                     decorationColor: AppColors.textMuted,
                   ),
@@ -323,7 +335,7 @@ class _WashCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${wash.vehicleTypeName} · #${wash.id}',
+                  '${wash.isExtra ? 'Extra · ' : ''}${wash.vehicleTypeName} · #${wash.id}',
                   style: GoogleFonts.inter(
                     fontSize: 11,
                     color: AppColors.textMuted,
@@ -437,7 +449,11 @@ class _ErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.wifi_off_rounded, size: 44, color: AppColors.textMuted2),
+            const Icon(
+              Icons.wifi_off_rounded,
+              size: 44,
+              color: AppColors.textMuted2,
+            ),
             const SizedBox(height: 14),
             Text(
               message,
@@ -553,10 +569,13 @@ class _WashDetailSheetState extends State<_WashDetailSheet> {
 
     if (confirmed != true || !mounted) return;
 
-    final vm        = context.read<WashesProvider>();
+    final vm = context.read<WashesProvider>();
     final messenger = ScaffoldMessenger.of(context);
 
-    final ok = await vm.cancelWash(widget.wash.id, notes: _notesController.text);
+    final ok = await vm.cancelWash(
+      widget.wash.id,
+      notes: _notesController.text,
+    );
 
     if (!mounted) return;
     Navigator.of(context).pop();
@@ -579,7 +598,7 @@ class _WashDetailSheetState extends State<_WashDetailSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final vm   = context.watch<WashesProvider>();
+    final vm = context.watch<WashesProvider>();
     final wash = widget.wash;
 
     return Container(
@@ -624,7 +643,9 @@ class _WashDetailSheetState extends State<_WashDetailSheet> {
                     ),
                   ),
                   StatusBadge.wash(
-                    wash.isCompleted ? WashStatus.completado : WashStatus.anulado,
+                    wash.isCompleted
+                        ? WashStatus.completado
+                        : WashStatus.anulado,
                   ),
                 ],
               ),
@@ -632,10 +653,10 @@ class _WashDetailSheetState extends State<_WashDetailSheet> {
               const Divider(color: AppColors.border, height: 1),
               const SizedBox(height: 12),
               // detail rows
-              _DetailRow(label: 'Servicio',  value: wash.displayService),
-              _DetailRow(label: 'Vehículo',  value: wash.vehicleTypeName),
-              _DetailRow(label: 'Precio',    value: Fmt.lempira(wash.price)),
-              _DetailRow(label: 'Fecha',     value: wash.dateTimeFormatted),
+              _DetailRow(label: 'Servicio', value: wash.displayService),
+              _DetailRow(label: 'Vehículo', value: wash.vehicleTypeName),
+              _DetailRow(label: 'Precio', value: Fmt.lempira(wash.price)),
+              _DetailRow(label: 'Fecha', value: wash.dateTimeFormatted),
               if (wash.userName != null)
                 _DetailRow(label: 'Registrado por', value: wash.userName!),
               if (wash.notes != null && wash.notes!.isNotEmpty)

@@ -65,19 +65,47 @@ class _Body extends StatelessWidget {
                     const SizedBox(height: 10),
                     _VehicleRow(types: vm.vehicleTypes),
                     if (vm.selectedVehicleType != null) ...[
-                      const SizedBox(height: 22),
-                      SectionHeader(title: 'Servicio'),
-                      const SizedBox(height: 10),
-                      _ServiceList(
-                        services: vm.selectedVehicleType!.washServices
-                            .where((s) => s.isActive)
-                            .toList(),
-                      ),
-                      if (vm.selectedService?.isCustom == true) ...[
+                      if (vm.availableWashes.isNotEmpty) ...[
                         const SizedBox(height: 22),
-                        SectionHeader(title: 'Detalles del servicio'),
+                        SectionHeader(
+                          title: 'Lavado',
+                          action: vm.availableExtras.isNotEmpty
+                              ? const _SectionHint(
+                                  'Opcional si solo es un extra',
+                                )
+                              : null,
+                        ),
                         const SizedBox(height: 10),
-                        const _CustomFieldsCard(),
+                        _ServiceList(services: vm.availableWashes),
+                      ],
+                      if (vm.availableExtras.isNotEmpty) ...[
+                        const SizedBox(height: 22),
+                        const SectionHeader(
+                          title: 'Extras',
+                          action: _SectionHint('Puedes elegir varios'),
+                        ),
+                        const SizedBox(height: 10),
+                        _ServiceList(
+                          services: vm.availableExtras,
+                          multiple: true,
+                        ),
+                      ],
+                      if (vm.availableWashes.isEmpty &&
+                          vm.availableExtras.isEmpty) ...[
+                        const SizedBox(height: 22),
+                        const _SectionHint(
+                          'Este vehículo no tiene servicios con precio. '
+                          'Configúralos en el panel web.',
+                        ),
+                      ],
+                      for (final service in vm.selectedCustomItems) ...[
+                        const SizedBox(height: 22),
+                        SectionHeader(title: 'Detalles: ${service.name}'),
+                        const SizedBox(height: 10),
+                        _CustomFieldsCard(
+                          key: ValueKey('custom-${service.id}'),
+                          service: service,
+                        ),
                       ],
                       const SizedBox(height: 22),
                       SectionHeader(title: 'Fecha del lavado (opcional)'),
@@ -174,7 +202,10 @@ class _VehicleRow extends StatelessWidget {
           runSpacing: spacing,
           children: [
             for (final type in types)
-              SizedBox(width: width, child: _VehicleCard(type: type)),
+              SizedBox(
+                width: width,
+                child: _VehicleCard(type: type),
+              ),
           ],
         );
       },
@@ -249,9 +280,29 @@ class _VehicleCard extends StatelessWidget {
 
 // ─── Service section ──────────────────────────────────────────────────────────
 
+class _SectionHint extends StatelessWidget {
+  const _SectionHint(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: GoogleFonts.inter(
+        fontSize: 11,
+        fontWeight: FontWeight.w500,
+        color: AppColors.textMuted,
+      ),
+    );
+  }
+}
+
 class _ServiceList extends StatelessWidget {
-  const _ServiceList({required this.services});
+  const _ServiceList({required this.services, this.multiple = false});
   final List<WashService> services;
+
+  /// true = extras (casillas, varios); false = lavado (uno solo).
+  final bool multiple;
 
   @override
   Widget build(BuildContext context) {
@@ -259,7 +310,7 @@ class _ServiceList extends StatelessWidget {
       children: [
         for (int i = 0; i < services.length; i++) ...[
           if (i > 0) const SizedBox(height: 8),
-          _ServiceCard(service: services[i]),
+          _ServiceCard(service: services[i], multiple: multiple),
         ],
       ],
     );
@@ -267,16 +318,22 @@ class _ServiceList extends StatelessWidget {
 }
 
 class _ServiceCard extends StatelessWidget {
-  const _ServiceCard({required this.service});
+  const _ServiceCard({required this.service, required this.multiple});
   final WashService service;
+  final bool multiple;
 
   @override
   Widget build(BuildContext context) {
-    final selected =
-        context.watch<RegisterWashProvider>().selectedService?.id == service.id;
+    final vm = context.watch<RegisterWashProvider>();
+    final selected = multiple
+        ? vm.isExtraSelected(service)
+        : vm.selectedWash?.id == service.id;
 
     return GestureDetector(
-      onTap: () => context.read<RegisterWashProvider>().selectService(service),
+      onTap: () {
+        final provider = context.read<RegisterWashProvider>();
+        multiple ? provider.toggleExtra(service) : provider.selectWash(service);
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
@@ -307,7 +364,8 @@ class _ServiceCard extends StatelessWidget {
               width: 20,
               height: 20,
               decoration: BoxDecoration(
-                shape: BoxShape.circle,
+                shape: multiple ? BoxShape.rectangle : BoxShape.circle,
+                borderRadius: multiple ? BorderRadius.circular(6) : null,
                 color: selected ? AppColors.primary : Colors.transparent,
                 border: Border.all(
                   color: selected ? AppColors.primary : AppColors.border,
@@ -335,7 +393,7 @@ class _ServiceCard extends StatelessWidget {
             ),
             if (!service.isCustom && service.basePrice != null)
               Text(
-                Fmt.lempira(service.basePrice!),
+                '${multiple ? '+ ' : ''}${Fmt.lempira(service.basePrice!)}',
                 style: GoogleFonts.inter(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
@@ -361,7 +419,8 @@ class _ServiceCard extends StatelessWidget {
 // ─── Custom fields ────────────────────────────────────────────────────────────
 
 class _CustomFieldsCard extends StatelessWidget {
-  const _CustomFieldsCard();
+  const _CustomFieldsCard({super.key, required this.service});
+  final WashService service;
 
   @override
   Widget build(BuildContext context) {
@@ -373,8 +432,9 @@ class _CustomFieldsCard extends StatelessWidget {
           AppTextField(
             label: 'Descripción del servicio',
             hint: 'Ej. Pulido, encerrado completo...',
-            onChanged: (v) =>
-                context.read<RegisterWashProvider>().setCustomDescription(v),
+            onChanged: (v) => context
+                .read<RegisterWashProvider>()
+                .setCustomDescription(service, v),
           ),
           const SizedBox(height: 14),
           AppTextField(
@@ -385,7 +445,7 @@ class _CustomFieldsCard extends StatelessWidget {
               FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
             ],
             onChanged: (v) =>
-                context.read<RegisterWashProvider>().setCustomPrice(v),
+                context.read<RegisterWashProvider>().setCustomPrice(service, v),
           ),
         ],
       ),
@@ -538,32 +598,71 @@ class _TotalCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final price = context.watch<RegisterWashProvider>().totalPrice;
+    final vm = context.watch<RegisterWashProvider>();
+    final price = vm.totalPrice;
+    final items = vm.selectedItems;
+
+    final totalRow = Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          'TOTAL A COBRAR',
+          style: GoogleFonts.inter(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textMuted,
+            letterSpacing: 0.5,
+          ),
+        ),
+        Text(
+          price != null ? Fmt.lempira(price) : '—',
+          style: GoogleFonts.inter(
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
+            color: price != null ? AppColors.primary : AppColors.textMuted,
+            letterSpacing: -0.5,
+            height: 1,
+          ),
+        ),
+      ],
+    );
 
     return AppCard(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Column(
         children: [
-          Text(
-            'TOTAL A COBRAR',
-            style: GoogleFonts.inter(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textMuted,
-              letterSpacing: 0.5,
-            ),
-          ),
-          Text(
-            price != null ? Fmt.lempira(price) : '—',
-            style: GoogleFonts.inter(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              color: price != null ? AppColors.primary : AppColors.textMuted,
-              letterSpacing: -0.5,
-              height: 1,
-            ),
-          ),
+          if (items.length > 1) ...[
+            for (final item in items)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        item.isExtra ? '+ ${item.name}' : item.name,
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: AppColors.textMuted,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      vm.priceOf(item) != null
+                          ? Fmt.lempira(vm.priceOf(item)!)
+                          : '—',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            const Divider(height: 18, color: AppColors.border),
+          ],
+          totalRow,
         ],
       ),
     );
@@ -595,7 +694,9 @@ class _SaveButton extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
           child: AppButton(
-            label: 'Guardar lavado',
+            label: vm.selectedItems.length > 1
+                ? 'Guardar (${vm.selectedItems.length} servicios)'
+                : 'Guardar',
             icon: Icons.check_rounded,
             loading: vm.saving,
             onPressed: (vm.canSave && !vm.saving)
@@ -608,7 +709,7 @@ class _SaveButton extends StatelessWidget {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(
-                            '¡Lavado registrado exitosamente!',
+                            '¡Registrado exitosamente!',
                             style: GoogleFonts.inter(
                               fontWeight: FontWeight.w600,
                             ),

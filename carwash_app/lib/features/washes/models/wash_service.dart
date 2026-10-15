@@ -2,6 +2,9 @@ class WashService {
   final int id;
   final int vehicleTypeId;
   final String name;
+
+  /// 'lavado' o 'extra'. Los extras se agregan al lavado o se cobran solos.
+  final String kind;
   final double? basePrice;
   final bool isCustom;
   final bool isActive;
@@ -10,6 +13,7 @@ class WashService {
     required this.id,
     required this.vehicleTypeId,
     required this.name,
+    this.kind = 'lavado',
     this.basePrice,
     required this.isCustom,
     required this.isActive,
@@ -20,6 +24,7 @@ class WashService {
       id: json['id'] as int,
       vehicleTypeId: json['vehicle_type_id'] as int,
       name: json['name'] as String,
+      kind: json['kind'] as String? ?? 'lavado',
       basePrice: json['base_price'] != null
           ? double.parse(json['base_price'].toString())
           : null,
@@ -27,4 +32,6 @@ class WashService {
       isActive: json['is_active'] as bool,
     );
   }
+
+  bool get isExtra => kind == 'extra';
 }

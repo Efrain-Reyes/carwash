@@ -3,6 +3,7 @@ class WashItem {
   final String vehicleTypeName;
   final String? vehicleTypeIcon;
   final String serviceName;
+  final bool isExtra;
   final String? customDescription;
   final double price;
   final String status;
@@ -15,6 +16,7 @@ class WashItem {
     required this.vehicleTypeName,
     this.vehicleTypeIcon,
     required this.serviceName,
+    this.isExtra = false,
     this.customDescription,
     required this.price,
     required this.status,
@@ -25,21 +27,24 @@ class WashItem {
 
   factory WashItem.fromJson(Map<String, dynamic> json) {
     return WashItem(
-      id:               json['id'] as int,
-      vehicleTypeName:  (json['vehicle_type'] as Map?)?['name']?.toString() ?? '',
-      vehicleTypeIcon:  (json['vehicle_type'] as Map?)?['icon']?.toString(),
-      serviceName:      (json['wash_service'] as Map?)?['name']?.toString() ?? '',
+      id: json['id'] as int,
+      vehicleTypeName:
+          (json['vehicle_type'] as Map?)?['name']?.toString() ?? '',
+      vehicleTypeIcon: (json['vehicle_type'] as Map?)?['icon']?.toString(),
+      serviceName: (json['wash_service'] as Map?)?['name']?.toString() ?? '',
+      isExtra: (json['wash_service'] as Map?)?['kind'] == 'extra',
       customDescription: json['custom_description'] as String?,
-      price:            double.parse(json['price'].toString()),
-      status:           json['status'] as String,
-      registeredAt:     DateTime.parse(json['registered_at'] as String),
-      userName:         (json['user'] as Map?)?['name']?.toString(),
-      notes:            json['notes'] as String?,
+      price: double.parse(json['price'].toString()),
+      status: json['status'] as String,
+      registeredAt: DateTime.parse(json['registered_at'] as String),
+      userName: (json['user'] as Map?)?['name']?.toString(),
+      notes: json['notes'] as String?,
     );
   }
 
-  String get displayService =>
-      (customDescription?.isNotEmpty ?? false) ? customDescription! : serviceName;
+  String get displayService => (customDescription?.isNotEmpty ?? false)
+      ? customDescription!
+      : serviceName;
 
   String get timeFormatted {
     final local = registeredAt.toLocal();
@@ -50,13 +55,13 @@ class WashItem {
 
   String get dateTimeFormatted {
     final local = registeredAt.toLocal();
-    final day   = local.day.toString().padLeft(2, '0');
+    final day = local.day.toString().padLeft(2, '0');
     final month = local.month.toString().padLeft(2, '0');
-    final h     = local.hour.toString().padLeft(2, '0');
-    final m     = local.minute.toString().padLeft(2, '0');
+    final h = local.hour.toString().padLeft(2, '0');
+    final m = local.minute.toString().padLeft(2, '0');
     return '$day/$month $h:$m';
   }
 
   bool get isCompleted => status == 'completado';
-  bool get isAnulado   => status == 'anulado';
+  bool get isAnulado => status == 'anulado';
 }
