@@ -27,6 +27,8 @@ IconData vehicleIcon(String? icon, {String name = ''}) {
 
   final n = name.toLowerCase();
   if (n.contains('moto')) return Icons.two_wheeler_rounded;
-  if (n.contains('camio') || n.contains('truck')) return Icons.local_shipping_rounded;
+  if (n.contains('camión') || n.contains('camion') || n.contains('truck')) {
+    return Icons.local_shipping_rounded;
+  }
   return Icons.directions_car_rounded;
 }

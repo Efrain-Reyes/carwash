@@ -20,7 +20,7 @@ return new class extends Migration
 
             $icon = match (true) {
                 str_contains($name, 'moto') => 'motorcycle',
-                str_contains($name, 'camio') || str_contains($name, 'truck') => 'truck',
+                str_contains($name, 'camión') || str_contains($name, 'camion') || str_contains($name, 'truck') => 'truck',
                 default => 'car',
             };
 
